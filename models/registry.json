@@ -1,0 +1,21 @@
+{
+  "tesseract": {
+    "base": {
+      "url": "https://github.com/tesseract-ocr/tessdata_best/raw/main/grc.traineddata",
+      "type": "traineddata",
+      "description": "Ancient Greek trained data for Tesseract (best quality)"
+    }
+  },
+  "trocr": {
+    "base": {
+      "url": "microsoft/trocr-base-handwritten",
+      "type": "huggingface",
+      "description": "Base trOCR model for handwritten text recognition"
+    },
+    "large": {
+      "url": "microsoft/trocr-large-handwritten",
+      "type": "huggingface",
+      "description": "Large trOCR model for handwritten text (better quality, slower)"
+    }
+  }
+}
