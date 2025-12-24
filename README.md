@@ -39,8 +39,8 @@ See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for complete architecture d
 
 - **[QUICKSTART.md](docs/QUICKSTART.md)** - Installation and getting started
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture and design
-- **OCR Service Plan** - `.claude/plans/ocr-service-plan.md`
-- **Training Plan** - `.claude/plans/training-plan.md`
+- **[OCR_SERVICE.md](docs/OCR_SERVICE.md)** - OCR service implementation plan
+- **[TRAINING.md](docs/TRAINING.md)** - Training and optimization plan
 
 ## Project Status
 
