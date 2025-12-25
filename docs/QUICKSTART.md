@@ -2,15 +2,32 @@
 
 ## What is Metafrasis?
 
-Metafrasis is an Ancient Greek OCR, transliteration, and translation application. It provides a modular architecture that supports multiple OCR engines and includes tools for fine-tuning models on your own data.
+Metafrasis is an Ancient Greek OCR, transliteration, and translation application. It provides a modular architecture that supports multiple OCR engines with streaming and batch processing pipelines.
 
 ## Current Status
 
-This project is under active development. Currently implemented:
-- ✅ Basic Streamlit UI with pipeline flow
-- ✅ Project structure and configuration
-- ⏳ OCR engines (coming soon)
-- ⏳ Training infrastructure (coming soon)
+**Interactive OCR Viewer Complete**
+
+Currently implemented:
+- ✅ Tesseract OCR engine (CPU baseline)
+- ✅ trOCR engine (PyTorch transformer with GPU support)
+- ✅ Interactive OCR viewer (custom React component)
+  - Click-to-toggle individual bounding boxes
+  - Hover tooltips for hidden words
+  - Image navigation (First/Prev/Next/Last)
+  - Toggle between original and annotated views
+- ✅ Streamlit UI with multi-file upload
+- ✅ Streaming and batch processing pipelines
+- ✅ PDF support with automatic page conversion
+- ✅ Word-level bounding boxes and confidence statistics
+- ✅ Image disk caching (temporary storage)
+- ✅ Model registry and external model hosting
+- ✅ Automated setup script (includes Node.js/npm)
+
+Coming soon:
+- ⏳ EasyOCR and Kraken engines
+- ⏳ Training infrastructure
+- ⏳ Transliteration & translation services
 
 ## Installation
 
@@ -18,17 +35,83 @@ This project is under active development. Currently implemented:
 
 - Python 3.11+
 - [uv](https://github.com/astral-sh/uv) package manager
+- macOS or Linux (Windows: manual installation required)
 
-### Setup
+### Automated Setup (Recommended)
+
+The setup script handles everything automatically:
 
 ```bash
 # Clone repository
 git clone https://github.com/yourusername/metafrasis.git
 cd metafrasis
 
-# Install dependencies
-uv sync
+# Basic installation (OCR engines only)
+./setup.sh
+
+# With development tools (pytest, ruff, etc.)
+./setup.sh --dev
+
+# Show help
+./setup.sh --help
 ```
+
+**What the script does:**
+1. Detects your OS (macOS or Linux)
+2. Installs Tesseract OCR with Ancient Greek language data
+3. Installs poppler-utils (for PDF support)
+4. Installs uv package manager (if needed)
+5. Installs all Python dependencies
+
+### Manual Setup
+
+If you prefer manual installation or are on Windows:
+
+#### macOS
+
+```bash
+# Install Homebrew (if not already installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install system dependencies
+brew install tesseract tesseract-lang poppler
+
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install Python dependencies
+uv sync
+
+# For development
+uv sync --extra dev
+```
+
+#### Linux (Ubuntu/Debian)
+
+```bash
+# Install system dependencies
+sudo apt update
+sudo apt install -y tesseract-ocr tesseract-ocr-grc poppler-utils
+
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install Python dependencies
+uv sync
+
+# For development
+uv sync --extra dev
+```
+
+#### Windows
+
+1. Install [Python 3.11+](https://www.python.org/downloads/)
+2. Install [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki):
+   - Download and install Tesseract-OCR
+   - Download Ancient Greek language data (grc.traineddata)
+3. Install [poppler](https://github.com/oschwartz10612/poppler-windows/releases)
+4. Install uv: `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"`
+5. Install Python dependencies: `uv sync`
 
 ## Running the Application
 
@@ -38,87 +121,217 @@ uv run streamlit run app.py
 
 Open your browser at `http://localhost:8501`
 
+## Using the Application
+
+### 1. Select OCR Engine
+
+In the sidebar, choose your OCR engine:
+- **Tesseract**: Fast, CPU-only, good for printed text
+- **trOCR**: Slower, GPU/CPU, excellent for handwritten text
+
+### 2. Choose Processing Pipeline
+
+- **Streaming (Sequential)**: Processes images one at a time (lower latency)
+- **Batch (Parallel)**: Processes all images together (faster for multiple files, optimized for GPU)
+
+### 3. Upload Files
+
+Upload one or more:
+- Images: PNG, JPG, JPEG
+- PDFs: Automatically converted to images
+
+### 4. Run OCR
+
+Click "Run OCR" and view results:
+- Extracted text for each page/image
+- Word-level confidence scores
+- Bounding boxes (Tesseract only)
+- Processing time and device info
+
+## OCR Engines
+
+### Tesseract
+
+| Feature | Details |
+|---------|---------|
+| Type | Traditional OCR (CPU) |
+| Speed | Fast (~0.5-2s per image) |
+| Accuracy | Good for printed text |
+| Bounding Boxes | ✅ Yes (word-level) |
+| Confidence | ✅ Yes (per-word) |
+| Best For | Printed books, clean scans |
+
+### trOCR
+
+| Feature | Details |
+|---------|---------|
+| Type | Transformer (PyTorch) |
+| Speed | Medium-Slow (GPU: ~1-2s, CPU: ~5-10s) |
+| Accuracy | Excellent for handwritten |
+| Bounding Boxes | ❌ No (end-to-end model) |
+| Confidence | ❌ No |
+| GPU Support | ✅ Yes (automatic detection) |
+| Batch Processing | ✅ Optimized |
+| Best For | Handwritten manuscripts |
+
+## Model Management
+
+All models are hosted externally:
+- **Tesseract**: Ancient Greek traineddata from tessdata_best
+- **trOCR**: `microsoft/trocr-base-handwritten` from HuggingFace Hub
+
+Models are automatically downloaded on first use and cached locally in `models/` (gitignored).
+
 ## Project Architecture
-
-### Planned OCR Engines
-
-| Engine | Type | Best For | Status |
-|--------|------|----------|--------|
-| **Tesseract** | Traditional | Printed text, baseline | Planned |
-| **Kraken** | LSTM | Manuscripts, historical docs | Planned |
-| **EasyOCR** | Deep Learning | General multilingual | Planned |
-| **trOCR** | Transformer | Handwritten, fine-tuning | Planned |
-| **Ensemble** | Voting | Maximum accuracy | Planned |
-
-### Model Management
-
-All models are hosted externally (HuggingFace Hub, S3, etc.):
-- **No models in git** - repository stays lightweight
-- `models/registry.json` contains URLs to all models
-- Models downloaded on first use and cached locally
-
-### Training Approach
-
-**Vision Model Annotation:**
-Use large vision models (GPT-4V, Claude, LLaVA) to annotate real Greek manuscript images instead of rendering synthetic fonts. This provides:
-- Real-world image distribution
-- Natural degradation and noise
-- Faster than manual annotation
-
-**Fine-tuning:**
-- trOCR: LoRA adapters (~10 MB)
-- EasyOCR: Full fine-tuning
-- Kraken: Custom model training
-
-## Directory Structure
 
 ```
 metafrasis/
-├── app.py                   # Streamlit UI
-├── config.py                # Configuration
+├── app.py                      # Streamlit UI
+├── config.py                   # Configuration
+├── setup.sh                    # Automated setup script
 ├── services/
-│   ├── ocr/                # OCR engines (planned)
-│   ├── transliterate_service.py (planned)
-│   └── translate_service.py (planned)
-├── training/               # Training tools (planned)
+│   └── ocr/                    # OCR service
+│       ├── base.py            # OCREngine, OCRResult, Word, BoundingBox
+│       ├── factory.py         # OCREngineFactory
+│       ├── preprocessing.py   # Image utilities + pdf_to_images()
+│       └── engines/
+│           ├── tesseract.py   # Tesseract engine
+│           └── trocr.py       # trOCR engine
 ├── models/
-│   ├── registry.json      # Model URLs
-│   └── download_models.py # Download script
-├── data/                  # Datasets (gitignored)
-└── docs/                  # Documentation
+│   ├── registry.json          # Model URLs (committed)
+│   └── [cached models]        # Downloaded models (gitignored)
+└── docs/                      # Documentation
 ```
+
+## Development
+
+### Running Tests
+
+```bash
+# Install dev dependencies
+./setup.sh --dev
+
+# Run tests
+uv run pytest
+
+# With coverage
+uv run pytest --cov=services --cov=utils
+```
+
+### Code Quality
+
+```bash
+# Lint
+uv run ruff check .
+
+# Format
+uv run ruff format .
+```
+
+### Interactive OCR Viewer Development
+
+The OCR viewer is a custom React component with two modes:
+
+**Development Mode (Default):**
+```bash
+# Terminal 1: Start Vite dev server
+cd frontend/ocr_viewer && npm run dev
+
+# Terminal 2: Run Streamlit (connects to dev server automatically)
+uv run streamlit run app.py
+```
+
+**Production Mode:**
+```bash
+# Run with pre-built component
+VIEWER_RELEASE=true uv run streamlit run app.py
+```
+
+## Building Releases
+
+To create a production release:
+
+```bash
+./scripts/build-release.sh
+```
+
+The release script will:
+1. ✅ Check for uncommitted changes (fails if found)
+2. ✅ Run all tests (fails if any fail)
+3. ✅ Build the frontend component
+4. ✅ Create a timestamp-based git tag (e.g., `v2024.12.24`)
+5. ✅ Ask if you want to push the tag to remote
+
+After the script completes, run in production mode:
+```bash
+VIEWER_RELEASE=true uv run streamlit run app.py
+```
+
+**Version Format:**
+- Tags use format: `vYYYY.MM.DD` (e.g., `v2024.12.24`)
+- Multiple releases on same day: `vYYYY.MM.DD.N` (e.g., `v2024.12.24.2`)
+
+**Requirements:**
+- No uncommitted changes
+- All tests must pass
+- Node.js, npm, and uv installed
+
+## Troubleshooting
+
+### Tesseract Not Found
+
+Make sure Tesseract is installed and in your PATH:
+```bash
+tesseract --version
+```
+
+### Ancient Greek Language Data Missing
+
+Download manually:
+```bash
+# macOS
+brew install tesseract-lang
+
+# Linux
+sudo apt install tesseract-ocr-grc
+```
+
+### GPU Not Detected
+
+Check PyTorch CUDA support:
+```python
+import torch
+print(torch.cuda.is_available())  # Should be True for GPU
+```
+
+### PDF Conversion Fails
+
+Make sure poppler is installed:
+```bash
+# macOS
+brew install poppler
+
+# Linux
+sudo apt install poppler-utils
+```
+
+## Next Steps
+
+- **Fine-tuning**: Coming soon - train custom trOCR models on your data
+- **More Engines**: EasyOCR and Kraken support planned
+- **Translation**: Ancient Greek to modern languages
+- **Transliteration**: Greek ↔ Latin script conversion
 
 ## Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete system architecture
-- **OCR Service Plan** - `.claude/plans/ocr-service-plan.md`
-- **Training Plan** - `.claude/plans/training-plan.md`
-
-## Development Roadmap
-
-### Phase 1: OCR Infrastructure
-- [ ] Implement base OCR engine class
-- [ ] Add Tesseract engine
-- [ ] Add trOCR engine
-- [ ] Add EasyOCR engine
-- [ ] Add Kraken engine
-- [ ] Implement ensemble voting
-
-### Phase 2: Training Tools
-- [ ] Vision model annotation script
-- [ ] Manual annotation/review tool
-- [ ] Dataset builder
-- [ ] trOCR fine-tuning script
-- [ ] Benchmarking tools
-
-### Phase 3: Services
-- [ ] Transliteration service
-- [ ] Translation service
-- [ ] Lexicon integration
+- **[OCR_SERVICE.md](OCR_SERVICE.md)** - OCR implementation details
+- **[TRAINING.md](TRAINING.md)** - Training infrastructure plan
+- **[CLAUDE.md](../CLAUDE.md)** - Guide for Claude Code development
 
 ## Contributing
 
-This project is in early development. Contributions welcome!
+This project is in active development. Contributions welcome!
 
 ## License
 
