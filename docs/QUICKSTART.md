@@ -207,16 +207,42 @@ metafrasis/
 
 ### Running Tests
 
+The project includes comprehensive tests for the OCR service:
+
 ```bash
 # Install dev dependencies
 ./setup.sh --dev
 
-# Run tests
+# Run all tests
 uv run pytest
 
-# With coverage
+# Run tests with verbose output
+uv run pytest -v
+
+# Run only OCR service tests
+uv run pytest tests/test_ocr/ -v
+
+# Run specific test file
+uv run pytest tests/test_ocr/test_base.py -v
+uv run pytest tests/test_ocr/test_factory.py -v
+uv run pytest tests/test_ocr/test_tesseract.py -v
+uv run pytest tests/test_ocr/test_cache.py -v
+uv run pytest tests/test_ocr/test_preprocessing.py -v
+
+# Run with coverage report
 uv run pytest --cov=services --cov=utils
+
+# Run tests and skip slow tests
+uv run pytest -m "not slow"
 ```
+
+**Test Coverage:**
+- `test_base.py` - Base classes (BoundingBox, Word, OCRResult, confidence statistics)
+- `test_factory.py` - OCREngineFactory (engine registration and creation)
+- `test_tesseract.py` - Tesseract engine (recognition, bounding boxes, confidence)
+- `test_cache.py` - ImageCache (caching, retrieval, deduplication)
+- `test_preprocessing.py` - Preprocessing utilities (PDF to images)
+- `conftest.py` - Shared fixtures (sample images, mock data, test helpers)
 
 ### Code Quality
 

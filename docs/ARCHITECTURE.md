@@ -2,7 +2,7 @@
 
 ## System Overview
 
-Metafrasis is a modular Ancient Greek OCR application with support for multiple OCR engines, fine-tuning capabilities, and a Streamlit-based user interface.
+Metafrasis is a modular Ancient Greek OCR application with a flexible detector + recognizer architecture, fine-tuning capabilities, and a Streamlit-based user interface.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -22,13 +22,19 @@ Metafrasis is a modular Ancient Greek OCR application with support for multiple 
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                 OCR Engine Plugins                           │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
-│  │Tesseract │ │  Kraken  │ │ EasyOCR  │ │  trOCR   │       │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘       │
-│  ┌──────────────────────────────────┐                       │
-│  │    Ensemble (Voting)             │                       │
-│  └──────────────────────────────────┘                       │
+│                    OCR Engine Layer                          │
+│  ┌──────────────┐                                            │
+│  │  Monolithic  │  Tesseract                                 │
+│  └──────────────┘                                            │
+│  ┌──────────────────────────────────────────────────┐        │
+│  │  Modular (PyTorchOCREngine)                      │        │
+│  │  ┌──────────────┐  ┌──────────────┐             │        │
+│  │  │  Detectors   │→ │  Recognizers │             │        │
+│  │  │ WholeImage   │  │    trOCR     │             │        │
+│  │  │  (CRAFT)     │  │   (CRNN)     │             │        │
+│  │  │   (DB)       │  │  (Kraken)    │             │        │
+│  │  └──────────────┘  └──────────────┘             │        │
+│  └──────────────────────────────────────────────────┘        │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -47,18 +53,25 @@ Metafrasis is a modular Ancient Greek OCR application with support for multiple 
 - New engines can be added without modifying existing code
 - Runtime engine selection via factory pattern
 
-### 2. External Model Hosting
+### 2. Modular Detection + Recognition
+- **Text detection** (finding text regions) separated from **text recognition** (reading text)
+- Detectors and recognizers are composable via `PyTorchOCREngine`
+- Intermediate `TextRegion` representation with crop and bounding box
+- Cross-image batching optimization for maximum GPU efficiency
+- Mix and match: Any detector can work with any recognizer
+
+### 3. External Model Hosting
 - **No models in git** - repository stays lightweight
 - All models hosted externally (HuggingFace, S3, direct URLs)
 - `models/registry.json` is the single source of truth
 - Models downloaded on first use and cached locally
 
-### 3. Modular Services
+### 4. Modular Services
 - OCR, transliteration, and translation are separate services
 - Each service can be developed and tested independently
 - Clear interfaces between components
 
-### 4. Pipeline Architecture
+### 5. Pipeline Architecture
 - Linear data flow: Image → OCR → Transliteration → Translation
 - Each stage can be inspected and edited
 - State preserved in Streamlit session
@@ -73,16 +86,29 @@ metafrasis/
 │
 ├── services/                    # Business logic
 │   ├── ocr/                     # OCR service
-│   │   ├── base.py             # Abstract base class
-│   │   ├── factory.py          # Engine factory
-│   │   ├── preprocessing.py    # Image preprocessing
-│   │   ├── postprocessing.py   # Text postprocessing
-│   │   └── engines/            # Engine implementations
-│   │       ├── tesseract.py
-│   │       ├── kraken.py
-│   │       ├── easyocr.py
-│   │       ├── trocr.py
-│   │       └── ensemble.py
+│   │   ├── __init__.py         # Registration
+│   │   ├── base.py             # OCREngine, Word, BoundingBox, TextRegion, OCRResult
+│   │   ├── types.py            # Type-safe enums (DetectorType, RecognizerType, EngineType)
+│   │   ├── factory.py          # OCREngineFactory with registries
+│   │   ├── preprocessing.py    # PDF conversion, image utilities
+│   │   ├── cache.py            # Temporary image caching
+│   │   │
+│   │   ├── detectors/          # Text detection components
+│   │   │   ├── base.py        # TextDetector abstract base
+│   │   │   ├── whole_image.py # WholeImageDetector (pass-through)
+│   │   │   ├── craft.py       # CRAFT detector (future)
+│   │   │   └── db.py          # DB detector (future)
+│   │   │
+│   │   ├── recognizers/        # Text recognition components
+│   │   │   ├── base.py        # TextRecognizer abstract base
+│   │   │   ├── trocr.py       # TrOCRRecognizer (Transformer-based)
+│   │   │   ├── crnn.py        # CRNN recognizer (future)
+│   │   │   └── kraken.py      # Kraken recognizer (future)
+│   │   │
+│   │   └── engines/            # OCR engine implementations
+│   │       ├── tesseract.py   # TesseractEngine (monolithic)
+│   │       └── pytorch_engine.py  # PyTorchOCREngine (modular composition)
+│   │
 │   ├── transliterate_service.py
 │   └── translate_service.py
 │
@@ -108,64 +134,174 @@ metafrasis/
 │   ├── reviewed/               # Manually corrected
 │   └── datasets/               # Final HF datasets
 │
+├── docs/                        # Documentation
+│   ├── ARCHITECTURE.md         # This file
+│   └── OCR_SERVICE.md          # Detailed OCR documentation
+│
 ├── utils/                       # Shared utilities
 └── tests/                       # Unit tests
+    └── test_ocr/               # OCR service tests
+        ├── test_factory.py
+        ├── test_detectors/
+        ├── test_recognizers/
+        └── test_engines/
 ```
 
 ## OCR Engine Architecture
 
-### Base Class Pattern
+### Modular Pipeline
 
-All engines inherit from `OCREngine` abstract base class:
+The core innovation is the separation of detection from recognition:
 
+```
+Image → TextDetector → TextRegions → TextRecognizer → Words → OCRResult
+```
+
+### Base Abstractions
+
+#### OCREngine (Base for all engines)
 ```python
-@dataclass
-class OCRResult:
-    text: str
-    confidence: Optional[float] = None  # Only if engine provides it
-    bounding_boxes: Optional[List[dict]] = None
-    word_confidences: Optional[List[float]] = None
-    engine_name: str = ""
-    processing_time: float = 0.0
-
 class OCREngine(ABC):
     @abstractmethod
-    def load_model(self): pass
+    def recognize(self, image: Image.Image) -> OCRResult:
+        """Run OCR on a single image"""
+        pass
 
-    @abstractmethod
-    def recognize(self, image: Image.Image) -> OCRResult: pass
+    def recognize_batch(self, images: List[Image.Image]) -> List[OCRResult]:
+        """Run OCR on multiple images (overrideable for optimization)"""
+        return [self.recognize(img) for img in images]
 
     @property
     @abstractmethod
-    def name(self) -> str: pass
+    def name(self) -> str:
+        """Engine identifier"""
+        pass
+```
+
+#### TextDetector (NEW - Modular Component)
+```python
+class TextDetector(ABC):
+    @abstractmethod
+    def detect(self, image: Image.Image) -> List[TextRegion]:
+        """Detect text regions in an image"""
+        pass
+
+    def detect_batch(self, images: List[Image.Image]) -> List[List[TextRegion]]:
+        """Batch detect (overrideable)"""
+        return [self.detect(img) for img in images]
+```
+
+#### TextRecognizer (NEW - Modular Component)
+```python
+class TextRecognizer(ABC):
+    @abstractmethod
+    def recognize_regions(self, regions: List[TextRegion]) -> List[Word]:
+        """Recognize text from regions (batch-optimized)"""
+        pass
+```
+
+#### PyTorchOCREngine (NEW - Composition)
+```python
+class PyTorchOCREngine(OCREngine):
+    def __init__(self, detector: TextDetector, recognizer: TextRecognizer, batch_size: int = 8):
+        self.detector = detector
+        self.recognizer = recognizer
+        self.batch_size = batch_size
+
+    @property
+    def name(self) -> str:
+        return f"{self.detector.name}_{self.recognizer.name}"
+
+    def recognize(self, image: Image.Image) -> OCRResult:
+        # 1. Detect text regions
+        regions = self.detector.detect(image)
+
+        # 2. Recognize text from regions
+        words = self.recognizer.recognize_regions(regions)
+
+        # 3. Return result
+        return OCRResult(words=words, engine_name=self.name, ...)
+
+    def recognize_batch(self, images: List[Image.Image]) -> List[OCRResult]:
+        # Cross-image batching optimization (see below)
+```
+
+### Intermediate Representation: TextRegion
+
+Bridges detection and recognition phases:
+
+```python
+@dataclass
+class TextRegion:
+    bbox: BoundingBox          # Location in original image
+    crop: Image.Image          # Cropped region for recognition
+    confidence: float          # Detection confidence
+    polygon: Optional[List]    # Optional polygon for rotated text
 ```
 
 ### Factory Pattern
 
-```python
-class OCREngineFactory:
-    _engines = {
-        "tesseract": TesseractEngine,
-        "kraken": KrakenEngine,
-        "easyocr": EasyOCREngine,
-        "trocr": TrOCREngine,
-        "ensemble": EnsembleEngine,
-    }
+Two creation modes with explicit parameters:
 
-    @classmethod
-    def create(cls, engine_name: str, **kwargs) -> OCREngine:
-        return cls._engines[engine_name](**kwargs)
+```python
+from services.ocr.factory import OCREngineFactory
+from services.ocr.types import DetectorType, RecognizerType, EngineType
+
+# Monolithic engine
+engine = OCREngineFactory.create(engine=EngineType.TESSERACT)
+
+# Modular engine (explicit composition)
+engine = OCREngineFactory.create(
+    detector=DetectorType.WHOLE_IMAGE,
+    recognizer=RecognizerType.TROCR,
+    device='cuda',
+    batch_size=8
+)
+
+# Registration system
+OCREngineFactory.register_engine('tesseract', TesseractEngine)
+OCREngineFactory.register_detector('whole_image', WholeImageDetector)
+OCREngineFactory.register_recognizer('trocr', TrOCRRecognizer)
 ```
 
-### Engine Implementations
+### Available Components
 
-| Engine | Type | Speed | Accuracy | GPU | Best For |
-|--------|------|-------|----------|-----|----------|
-| **Tesseract** | Traditional | Fast | Good | No | Printed text, baseline |
-| **Kraken** | LSTM | Medium | Very Good | Optional | Manuscripts, historical docs |
-| **EasyOCR** | Deep Learning | Medium | Very Good | Yes | General multilingual |
-| **trOCR** | Transformer | Slow | Excellent | Yes | Handwritten, fine-tuning |
-| **Ensemble** | Voting | Slowest | Best | Depends | Maximum accuracy |
+**Monolithic Engines:**
+| Engine | Type | Speed | GPU | Best For |
+|--------|------|-------|-----|----------|
+| **Tesseract** | Traditional | Fast | No | Printed text, baseline |
+
+**Detectors (Modular):**
+| Detector | Type | Output | Use Case |
+|----------|------|--------|----------|
+| **WholeImageDetector** | Pass-through | Single region (entire image) | End-to-end models like trOCR |
+| CRAFT (future) | Character-level | Polygons | Scene text, documents |
+| DB (future) | Document | Rectangles | Fast printed text |
+
+**Recognizers (Modular):**
+| Recognizer | Type | Speed | GPU | Best For |
+|------------|------|-------|-----|----------|
+| **TrOCRRecognizer** | Transformer | Slow | Yes | Handwritten, Ancient Greek |
+| CRNN (future) | CNN+RNN | Fast | Optional | Printed text |
+| Kraken (future) | LSTM | Medium | Optional | Historical manuscripts |
+
+### Cross-Image Batching Optimization
+
+`PyTorchOCREngine` flattens regions across all images for maximum GPU utilization:
+
+```
+Traditional (per-image):
+  Image 1 → detect → recognize → Result 1
+  Image 2 → detect → recognize → Result 2
+  Image 3 → detect → recognize → Result 3
+
+Cross-image batching:
+  All images → batch detect → flatten ALL regions → batch recognize → reassemble
+
+Example: 3 images × 2 regions = 6 regions
+  - With batch_size=4: [4 regions batch, 2 regions batch] = 2 forward passes
+  - Per-image: 3 forward passes
+```
 
 ## Model Management
 
@@ -248,18 +384,28 @@ Metrics tracked:
 ### Runtime (User Interaction)
 
 ```
-1. Upload Image
+1. Upload Image/PDF
    ↓
-2. Select Engine (UI dropdown)
+2. Select Engine Mode (UI dropdown)
+   ├─ Monolithic: Select engine
+   └─ Modular: Select detector + recognizer
    ↓
-3. OCREngine.recognize(image)
-   ↓  - Load model (if needed)
-   ↓  - Preprocess image
-   ↓  - Run inference
+3. OCR Processing
+   ├─ Monolithic (Tesseract):
+   │  └─ Direct recognize(image) → OCRResult
+   │
+   └─ Modular (PyTorchOCREngine):
+      ├─ Detector.detect(image) → List[TextRegion]
+      ├─ Recognizer.recognize_regions(regions) → List[Word]
+      └─ Assemble → OCRResult
    ↓
 4. Return OCRResult
+   ├─ words: List[Word]
+   ├─ text: str (concatenated)
+   ├─ confidence_stats: ConfidenceStats
+   └─ processing_time: float
    ↓
-5. Display & Edit
+5. Display & Edit in UI
    ↓
 6. Optional: Transliteration
    ↓
@@ -295,7 +441,7 @@ ANTHROPIC_API_KEY=...
 
 ### Config Files
 
-- `config.py`: Application settings
+- `config.py`: Application settings (OCR batch size, device, etc.)
 - `training/configs/*.yaml`: Training configurations
 - `models/registry.json`: Model URLs and metadata
 
@@ -304,13 +450,25 @@ ANTHROPIC_API_KEY=...
 ```
 tests/
 ├── test_ocr/
-│   ├── test_base.py          # Base class tests
-│   ├── test_factory.py       # Factory pattern tests
-│   ├── test_tesseract.py     # Engine-specific tests
-│   └── ...
+│   ├── conftest.py              # Shared fixtures (images, regions, words)
+│   ├── test_factory.py          # Factory pattern, registration
+│   │
+│   ├── test_detectors/
+│   │   ├── test_base.py        # TextDetector base class
+│   │   └── test_whole_image.py # WholeImageDetector
+│   │
+│   ├── test_recognizers/
+│   │   ├── test_base.py        # TextRecognizer base class
+│   │   └── test_trocr.py       # TrOCRRecognizer (mocked)
+│   │
+│   └── test_engines/
+│       ├── test_tesseract.py   # TesseractEngine
+│       └── test_pytorch_engine.py  # PyTorchOCREngine composition, batching
+│
 ├── test_training/
 │   ├── test_vision_annotate.py
 │   └── test_dataset_builder.py
+│
 └── fixtures/
     ├── test_images/
     └── test_labels/
@@ -319,14 +477,34 @@ tests/
 ## Performance Considerations
 
 ### Model Loading
-- Lazy loading: Models loaded on first use
-- Caching: Models stay loaded in memory during session
-- GPU management: Automatic device selection
+- **Lazy loading**: Models load on first use (both detector and recognizer)
+- **Caching**: Models stay loaded in memory during session
+- **GPU management**: Automatic device selection with manual override
+- **Modular engines**: Both detector and recognizer lazy load independently
 
 ### Image Processing
-- Batch processing support (for training)
-- Preprocessing pipeline (resize, denoise, binarize)
-- Memory-efficient streaming for large datasets
+- **Cross-image batching**: Flattens regions across all images before batching
+- **Batch processing support**: Configurable batch size (default: 8)
+- **Preprocessing pipeline**: Resize, denoise, binarize
+- **Memory-efficient streaming**: For large datasets in training
+
+### Batching Strategy
+
+**Per-Image (Traditional):**
+```
+Image 1 (2 regions) → batch → 2 words
+Image 2 (2 regions) → batch → 2 words
+Image 3 (2 regions) → batch → 2 words
+Total: 3 recognition calls
+```
+
+**Cross-Image (Optimized):**
+```
+Images 1-3 → detect all → 6 regions total
+  → flatten → batch(4) + batch(2) → 6 words
+  → reassemble → 3 results
+Total: 2 recognition calls (batch_size=4)
+```
 
 ### API Costs
 - Vision model annotation: ~$0.01-0.03 per image
@@ -342,9 +520,56 @@ tests/
 
 ## Future Enhancements
 
+### Near-term (Modular Architecture)
+- [ ] CRAFT detector implementation
+- [ ] DB detector implementation
+- [ ] CRNN recognizer implementation
+- [ ] Kraken recognizer implementation
+- [ ] Ensemble voting (combine multiple detector+recognizer combinations)
+
+### Long-term
 - [ ] Real-time OCR with webcam
 - [ ] Mobile app integration
 - [ ] Collaborative annotation
 - [ ] Active learning loop
 - [ ] Multi-language support (Latin, Coptic)
 - [ ] Integration with digital libraries (Perseus, TLG)
+
+## Key Architectural Decisions
+
+### Why Separate Detection from Recognition?
+
+**Flexibility**: Mix and match detectors with recognizers
+- CRAFT + trOCR for handwritten scene text
+- DB + CRNN for fast printed documents
+- WholeImage + trOCR for end-to-end (current default)
+
+**GPU Efficiency**: Cross-image batching maximizes utilization
+- Flatten all regions across all images
+- Single large batch instead of many small batches
+- Better GPU memory utilization
+
+**Specialization**: Each component does one thing well
+- Detectors focus on finding text
+- Recognizers focus on reading text
+- Easier to optimize and fine-tune independently
+
+### Why Keep Tesseract Monolithic?
+
+Tesseract is a library wrapper - no need to decompose:
+- Already implements both detection and recognition
+- CPU-only, no batching benefits
+- Provides baseline for comparison
+- Fast and lightweight
+
+### Why Cross-Image Batching?
+
+**Problem**: Processing each image separately wastes GPU batch slots
+- Image 1 has 2 regions → batch of 2 (underutilized if batch_size=8)
+- Image 2 has 2 regions → batch of 2 (underutilized)
+
+**Solution**: Flatten all regions across all images
+- Images 1-3 have 6 total regions → batches of 4 and 2 (better utilization)
+- Fewer forward passes, better GPU usage
+
+**Trade-off**: Slightly more complex reassembly logic, but significant performance gain

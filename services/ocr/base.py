@@ -24,6 +24,20 @@ class BoundingBox:
 
 
 @dataclass
+class TextRegion:
+    """
+    A detected text region before recognition
+
+    Represents a region of an image that contains text, detected by a TextDetector.
+    The recognizer will process the cropped image to extract the actual text.
+    """
+    bbox: BoundingBox  # Region coordinates in original image
+    crop: Image.Image  # Cropped image of this region
+    confidence: float = DEFAULT_CONFIDENCE  # Detection confidence
+    polygon: Optional[List[tuple]] = None  # Optional polygon for rotated text
+
+
+@dataclass
 class Word:
     """Single recognized word with bounding box and confidence"""
     text: str

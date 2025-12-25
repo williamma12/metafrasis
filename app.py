@@ -16,6 +16,9 @@ from services.ocr import (
     DEFAULT_CONFIDENCE,
     ImageCache,
     ocr_viewer,
+    DetectorType,
+    RecognizerType,
+    EngineType,
 )
 import config
 
@@ -47,18 +50,66 @@ st.write("Ancient Greek OCR, Transliteration, and Translation")
 
 # Sidebar - OCR Settings
 st.sidebar.header("OCR Settings")
-available_engines = OCREngineFactory.available_engines()
 
-if not available_engines:
+# Engine selection mode
+available_engines = OCREngineFactory.available_engines()
+available_detectors = OCREngineFactory.available_detectors()
+available_recognizers = OCREngineFactory.available_recognizers()
+
+# Check if we have any engines
+if not available_engines and not (available_detectors and available_recognizers):
     st.error("No OCR engines available! Check your installation.")
     st.stop()
 
-engine_name = st.sidebar.selectbox(
-    "Select OCR Engine",
-    available_engines,
-    index=0 if config.DEFAULT_OCR_ENGINE not in available_engines
-          else available_engines.index(config.DEFAULT_OCR_ENGINE)
+# Engine mode selection
+engine_mode = st.sidebar.radio(
+    "Engine Mode",
+    ["Monolithic Engine", "Modular (Detector + Recognizer)"],
+    help="Monolithic: Single engine (e.g., Tesseract). Modular: Combine detector + recognizer."
 )
+
+# Warning for modular mode
+if engine_mode == "Modular (Detector + Recognizer)":
+    st.sidebar.warning(
+        "⚠️ **Experimental**: Modular mode is under development. "
+        "Detection + recognition may have reduced accuracy compared to "
+        "end-to-end models. Use for testing only."
+    )
+
+if engine_mode == "Monolithic Engine":
+    if not available_engines:
+        st.sidebar.error("No monolithic engines available. Use modular mode.")
+        st.stop()
+
+    engine_name = st.sidebar.selectbox(
+        "Select Engine",
+        available_engines,
+        index=0
+    )
+    detector_name = None
+    recognizer_name = None
+else:
+    # Modular mode
+    if not available_detectors:
+        st.sidebar.error("No detectors available!")
+        st.stop()
+    if not available_recognizers:
+        st.sidebar.error("No recognizers available!")
+        st.stop()
+
+    detector_name = st.sidebar.selectbox(
+        "Select Detector",
+        available_detectors,
+        help="Detector finds text regions in images"
+    )
+
+    recognizer_name = st.sidebar.selectbox(
+        "Select Recognizer",
+        available_recognizers,
+        help="Recognizer reads text from detected regions"
+    )
+
+    engine_name = None
 
 # Pipeline selection
 pipeline = st.sidebar.radio(
@@ -94,12 +145,23 @@ if uploaded_files:
     if st.button("🔍 Run OCR", type="primary"):
         try:
             # Create engine
-            with st.spinner(f"Loading {engine_name} engine..."):
-                engine = OCREngineFactory.create(
-                    engine_name,
-                    batch_size=config.OCR_BATCH_SIZE,
-                    device=device
-                )
+            if engine_name:
+                engine_display_name = engine_name
+                with st.spinner(f"Loading {engine_name} engine..."):
+                    engine = OCREngineFactory.create(
+                        engine=engine_name,
+                        batch_size=config.OCR_BATCH_SIZE,
+                        device=device
+                    )
+            else:
+                engine_display_name = f"{detector_name}+{recognizer_name}"
+                with st.spinner(f"Loading {detector_name} detector + {recognizer_name} recognizer..."):
+                    engine = OCREngineFactory.create(
+                        detector=detector_name,
+                        recognizer=recognizer_name,
+                        batch_size=config.OCR_BATCH_SIZE,
+                        device=device
+                    )
 
             # Collect all images from uploaded files
             all_images = []
@@ -138,7 +200,7 @@ if uploaded_files:
             # Process images based on pipeline choice
             if use_batch:
                 # Batch pipeline: Process all at once
-                with st.spinner(f"Batch processing {len(all_images)} images with {engine_name}..."):
+                with st.spinner(f"Batch processing {len(all_images)} images with {engine_display_name}..."):
                     progress_bar = st.progress(0)
                     state.ocr_results = engine.recognize_batch(all_images)
 
