@@ -210,6 +210,7 @@ __marimo__/
 models/*
 !models/registry.json
 !models/.gitkeep
+!models/download_models.py
 
 # Metafrasis - Training data and outputs
 data/

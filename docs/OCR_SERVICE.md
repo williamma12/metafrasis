@@ -302,12 +302,14 @@ services/ocr/
 ├── detectors/               # Text detection components
 │   ├── __init__.py
 │   ├── base.py             # TextDetector abstract base class
-│   └── whole_image.py      # WholeImageDetector (pass-through)
+│   ├── whole_image.py      # WholeImageDetector (pass-through)
+│   └── craft.py            # CRAFTDetector (character-level detection)
 │
 ├── recognizers/             # Text recognition components
 │   ├── __init__.py
 │   ├── base.py             # TextRecognizer abstract base class
-│   └── trocr.py            # TrOCRRecognizer (Transformer-based)
+│   ├── trocr.py            # TrOCRRecognizer (Transformer-based)
+│   └── crnn.py             # CRNNRecognizer (CNN+RNN with CTC)
 │
 └── engines/                 # OCR engine implementations
     ├── __init__.py
@@ -346,8 +348,8 @@ engine = OCREngineFactory.create(
 
 # Query available components
 engines = OCREngineFactory.available_engines()        # ['tesseract']
-detectors = OCREngineFactory.available_detectors()    # ['whole_image']
-recognizers = OCREngineFactory.available_recognizers()  # ['trocr']
+detectors = OCREngineFactory.available_detectors()    # ['whole_image', 'craft']
+recognizers = OCREngineFactory.available_recognizers()  # ['trocr', 'crnn']
 ```
 
 ### Registration System
@@ -388,13 +390,13 @@ from enum import Enum
 class DetectorType(str, Enum):
     """Available text detectors"""
     WHOLE_IMAGE = "whole_image"
-    # CRAFT = "craft"  # Future
+    CRAFT = "craft"
     # DB = "db"        # Future
 
 class RecognizerType(str, Enum):
     """Available text recognizers"""
     TROCR = "trocr"
-    # CRNN = "crnn"    # Future
+    CRNN = "crnn"
     # KRAKEN = "kraken"  # Future
 
 class EngineType(str, Enum):
@@ -417,16 +419,26 @@ class EngineType(str, Enum):
 | Detector | Purpose | Output | Use Case |
 |----------|---------|--------|----------|
 | **WholeImageDetector** | Pass-through for end-to-end models | Single TextRegion covering entire image | Use with recognizers that don't need explicit detection (like trOCR) |
+| **CRAFTDetector** | Character-level text detection | Multiple TextRegions (words/characters) | Scene text, documents with complex layouts, multi-region detection |
+
+**CRAFTDetector** features:
+- Character Region Awareness For Text detection (CRAFT)
+- VGG16-BN backbone with U-Net decoder architecture
+- Dual heatmap outputs: region score (text) + affinity score (character linkage)
+- Configurable thresholds for detection sensitivity
+- Handles rotated and curved text with polygon support
+- GPU acceleration with CPU fallback
+- Pretrained weights available: MLT (multi-lingual) and ICDAR datasets
 
 Future detectors:
-- **CRAFT**: Character-level detection for scene text
-- **DB**: Fast document detection with binarization
+- **DB**: Fast document detection with differentiable binarization
 
 ### Recognizers
 
 | Recognizer | Type | Speed | Accuracy | GPU | Best For |
 |------------|------|-------|----------|-----|----------|
 | **TrOCRRecognizer** | Transformer | Slow | Excellent | Yes | Handwritten text, fine-tuning, Ancient Greek |
+| **CRNNRecognizer** | CNN+RNN | Fast | Good | Optional | Printed text, real-time applications, resource-constrained environments |
 
 **TrOCRRecognizer** features:
 - HuggingFace transformer model (default: `microsoft/trocr-base-handwritten`)
@@ -434,9 +446,20 @@ Future detectors:
 - GPU acceleration with automatic CPU fallback
 - Uses detection confidence (trOCR doesn't provide character-level confidence)
 
+**CRNNRecognizer** features:
+- Convolutional Recurrent Neural Network with CTC decoding
+- CNN backbone (7 conv layers) for feature extraction
+- Bidirectional LSTM for sequence modeling
+- CTC (Connectionist Temporal Classification) for alignment-free decoding
+- Fast inference: ~10x faster than transformer models
+- Configurable character set (default: digits + lowercase letters)
+- Batch processing with configurable batch size (default: 16)
+- Works efficiently on both CPU and GPU
+- Grayscale or RGB input support
+- Pretrained weights available from Deep Text Recognition Benchmark
+
 Future recognizers:
-- **CRNN**: Fast printed text recognition
-- **Kraken**: Historical document specialist
+- **Kraken**: Historical document specialist with Ancient Greek support
 
 ## Cross-Image Batching Optimization
 
@@ -555,6 +578,30 @@ for i, result in enumerate(results):
     print(f"Page {i+1}: {result.text}")
 ```
 
+### CRAFT + CRNN for Scene Text and Documents
+
+```python
+from services.ocr.factory import OCREngineFactory
+from services.ocr.types import DetectorType, RecognizerType
+
+# Create CRAFT + CRNN engine for fast, accurate printed text
+engine = OCREngineFactory.create(
+    detector=DetectorType.CRAFT,
+    recognizer=RecognizerType.CRNN,
+    device='cuda',
+    batch_size=16
+)
+
+# Process image with complex layout
+image = Image.open('document.png')
+result = engine.recognize(image)
+
+# CRAFT detects multiple text regions
+print(f"Detected {len(result.words)} text regions")
+for word in result.words:
+    print(f"'{word.text}' at ({word.bbox.left}, {word.bbox.top})")
+```
+
 ### Custom Device and Batch Size
 
 ```python
@@ -572,6 +619,21 @@ engine = OCREngineFactory.create(
     recognizer='trocr',
     device='cuda',
     batch_size=32  # Larger batches for GPU
+)
+
+# CRAFT + CRNN with custom thresholds
+engine = OCREngineFactory.create(
+    detector='craft',
+    recognizer='crnn',
+    device='cuda',
+    # CRAFT-specific parameters
+    text_threshold=0.7,     # Higher = fewer false positives
+    link_threshold=0.4,     # Controls character grouping
+    canvas_size=1920,       # Max image dimension
+    # CRNN-specific parameters
+    charset="0123456789abcdefghijklmnopqrstuvwxyz",
+    img_height=32,
+    img_width=100
 )
 ```
 
@@ -624,11 +686,13 @@ tests/test_ocr/
 │
 ├── test_detectors/
 │   ├── test_base.py                    # TextDetector base class
-│   └── test_whole_image.py             # WholeImageDetector
+│   ├── test_whole_image.py             # WholeImageDetector
+│   └── test_craft.py                   # CRAFTDetector
 │
 ├── test_recognizers/
 │   ├── test_base.py                    # TextRecognizer base class
-│   └── test_trocr.py                   # TrOCRRecognizer (mocked)
+│   ├── test_trocr.py                   # TrOCRRecognizer (mocked)
+│   └── test_crnn.py                    # CRNNRecognizer
 │
 └── test_engines/
     ├── test_tesseract.py               # TesseractEngine
@@ -637,28 +701,89 @@ tests/test_ocr/
 
 Run tests:
 ```bash
+# All tests
 pytest tests/test_ocr/ -v
+
+# Skip tests requiring pretrained models
+pytest tests/test_ocr/ -v -m "not requires_craft and not requires_crnn"
+
+# Only CRAFT tests
+pytest tests/test_ocr/test_detectors/test_craft.py -v
+
+# Only CRNN tests
+pytest tests/test_ocr/test_recognizers/test_crnn.py -v
+```
+
+## Model Weights
+
+### Downloading Pretrained Weights
+
+CRAFT and CRNN require pretrained model weights for optimal performance. Use the download utility:
+
+```bash
+# List available models
+python models/download_models.py --list
+
+# Download CRAFT weights (MLT dataset - recommended)
+python models/download_models.py --craft base
+
+# Download CRNN weights
+python models/download_models.py --crnn base
+
+# Download all models
+python models/download_models.py --all
+```
+
+**Available model variants:**
+
+**CRAFT:**
+- `base` (craft_mlt_25k.pth): Trained on Multi-Lingual Text dataset - recommended for general use
+- `icdar` (craft_ic15_20k.pth): Trained on ICDAR 2015 dataset - optimized for scene text
+
+**CRNN:**
+- `base` (crnn_vgg_bilstm_ctc.pth): VGG + BiLSTM with CTC, supports digits and lowercase letters
+
+**Model Registry:**
+
+Models are registered in `models/registry.json` with download URLs and metadata. Downloaded weights are stored in model-specific subdirectories:
+```
+models/
+├── craft/
+│   └── craft_mlt_25k.pth
+└── crnn/
+    └── crnn_vgg_bilstm_ctc.pth
+```
+
+### Using Pretrained Weights
+
+```python
+# With pretrained weights
+engine = OCREngineFactory.create(
+    detector='craft',
+    recognizer='crnn',
+    device='cuda',
+    # Specify weight paths (optional - uses defaults if not provided)
+    detector_model_path='models/craft/craft_mlt_25k.pth',
+    recognizer_model_path='models/crnn/crnn_vgg_bilstm_ctc.pth'
+)
+
+# Without weights (random initialization - for testing only)
+engine = OCREngineFactory.create(
+    detector='craft',
+    recognizer='crnn',
+    device='cpu'
+)
 ```
 
 ## Future Enhancements
 
 ### Planned Detectors
-- **CRAFT**: Character Region Awareness For Text detection
-  - Good for scene text and documents
-  - Polygon-based bounding boxes
-  - Source: EasyOCR or manual PyTorch
-
 - **DB**: Differentiable Binarization detector
   - Fast and accurate for printed documents
   - Configurable thresholds
   - Source: PaddleOCR or manual PyTorch
 
 ### Planned Recognizers
-- **CRNN**: Convolutional Recurrent Neural Network
-  - Fast recognition for printed text
-  - Good accuracy/speed tradeoff
-  - Source: EasyOCR or manual PyTorch
-
 - **Kraken**: Historical document specialist
   - Designed for manuscripts
   - Ancient Greek language support

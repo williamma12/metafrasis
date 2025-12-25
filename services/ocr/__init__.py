@@ -34,9 +34,21 @@ try:
 except ImportError:
     pass
 
+try:
+    from .detectors.craft import CRAFTDetector
+    OCREngineFactory.register_detector('craft', CRAFTDetector)
+except ImportError as e:
+    print(f"CRAFT detector not available: {e}")
+
 # Register recognizers
 try:
     from .recognizers.trocr import TrOCRRecognizer
     OCREngineFactory.register_recognizer('trocr', TrOCRRecognizer)
 except ImportError:
     pass  # trOCR not available
+
+try:
+    from .recognizers.crnn import CRNNRecognizer
+    OCREngineFactory.register_recognizer('crnn', CRNNRecognizer)
+except ImportError as e:
+    print(f"CRNN recognizer not available: {e}")

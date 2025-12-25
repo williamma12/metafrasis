@@ -17,5 +17,27 @@
       "type": "huggingface",
       "description": "Large trOCR model for handwritten text (better quality, slower)"
     }
+  },
+  "craft": {
+    "base": {
+      "url": "https://drive.google.com/uc?id=1Jk4eGD7crsqCCg9C9VjCLkMN3ze8kutZ",
+      "type": "gdrive",
+      "filename": "craft_mlt_25k.pth",
+      "description": "CRAFT detector pretrained on MLT (Multi-Lingual Text) dataset"
+    },
+    "icdar": {
+      "url": "https://drive.google.com/uc?id=1bupFXqT-VU6Jjeul13XP7yx2Sg5IHr4J",
+      "type": "gdrive",
+      "filename": "craft_ic15_20k.pth",
+      "description": "CRAFT detector pretrained on ICDAR 2015 dataset"
+    }
+  },
+  "crnn": {
+    "base": {
+      "url": "https://github.com/clovaai/deep-text-recognition-benchmark/releases/download/v1.0/None-VGG-BiLSTM-CTC.pth",
+      "type": "direct",
+      "filename": "crnn_vgg_bilstm_ctc.pth",
+      "description": "CRNN recognizer with VGG backbone and BiLSTM (English characters + digits)"
+    }
   }
 }

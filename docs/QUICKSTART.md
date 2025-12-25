@@ -47,13 +47,13 @@ git clone https://github.com/yourusername/metafrasis.git
 cd metafrasis
 
 # Basic installation (OCR engines only)
-./setup.sh
+./scripts/setup.sh
 
 # With development tools (pytest, ruff, etc.)
-./setup.sh --dev
+./scripts/setup.sh --dev
 
 # Show help
-./setup.sh --help
+./scripts/setup.sh --help
 ```
 
 **What the script does:**
@@ -188,7 +188,8 @@ Models are automatically downloaded on first use and cached locally in `models/`
 metafrasis/
 ├── app.py                      # Streamlit UI
 ├── config.py                   # Configuration
-├── setup.sh                    # Automated setup script
+├── scripts/
+│   └── setup.sh/               # Automated setup script
 ├── services/
 │   └── ocr/                    # OCR service
 │       ├── base.py            # OCREngine, OCRResult, Word, BoundingBox

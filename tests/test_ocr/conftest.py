@@ -205,3 +205,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "requires_pdf: marks tests that require sample PDF file"
     )
+    config.addinivalue_line(
+        "markers", "requires_craft: marks tests that require CRAFT dependencies"
+    )
+    config.addinivalue_line(
+        "markers", "requires_crnn: marks tests that require CRNN dependencies"
+    )
