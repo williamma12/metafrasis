@@ -303,13 +303,15 @@ services/ocr/
 │   ├── __init__.py
 │   ├── base.py             # TextDetector abstract base class
 │   ├── whole_image.py      # WholeImageDetector (pass-through)
-│   └── craft.py            # CRAFTDetector (character-level detection)
+│   ├── craft.py            # CRAFTDetector (character-level detection)
+│   └── db.py               # DBDetector (differentiable binarization)
 │
 ├── recognizers/             # Text recognition components
 │   ├── __init__.py
 │   ├── base.py             # TextRecognizer abstract base class
 │   ├── trocr.py            # TrOCRRecognizer (Transformer-based)
-│   └── crnn.py             # CRNNRecognizer (CNN+RNN with CTC)
+│   ├── crnn.py             # CRNNRecognizer (CNN+RNN with CTC)
+│   └── kraken.py           # KrakenRecognizer (historical documents)
 │
 └── engines/                 # OCR engine implementations
     ├── __init__.py
@@ -348,8 +350,8 @@ engine = OCREngineFactory.create(
 
 # Query available components
 engines = OCREngineFactory.available_engines()        # ['tesseract']
-detectors = OCREngineFactory.available_detectors()    # ['whole_image', 'craft']
-recognizers = OCREngineFactory.available_recognizers()  # ['trocr', 'crnn']
+detectors = OCREngineFactory.available_detectors()    # ['whole_image', 'craft', 'db']
+recognizers = OCREngineFactory.available_recognizers()  # ['trocr', 'crnn', 'kraken']
 ```
 
 ### Registration System
@@ -391,13 +393,13 @@ class DetectorType(str, Enum):
     """Available text detectors"""
     WHOLE_IMAGE = "whole_image"
     CRAFT = "craft"
-    # DB = "db"        # Future
+    DB = "db"
 
 class RecognizerType(str, Enum):
     """Available text recognizers"""
     TROCR = "trocr"
     CRNN = "crnn"
-    # KRAKEN = "kraken"  # Future
+    KRAKEN = "kraken"
 
 class EngineType(str, Enum):
     """Available monolithic engines"""
@@ -420,6 +422,7 @@ class EngineType(str, Enum):
 |----------|---------|--------|----------|
 | **WholeImageDetector** | Pass-through for end-to-end models | Single TextRegion covering entire image | Use with recognizers that don't need explicit detection (like trOCR) |
 | **CRAFTDetector** | Character-level text detection | Multiple TextRegions (words/characters) | Scene text, documents with complex layouts, multi-region detection |
+| **DBDetector** | Real-time text detection | Multiple TextRegions (word boxes) | Fast document/scene text detection, real-time applications |
 
 **CRAFTDetector** features:
 - Character Region Awareness For Text detection (CRAFT)
@@ -430,8 +433,16 @@ class EngineType(str, Enum):
 - GPU acceleration with CPU fallback
 - Pretrained weights available: MLT (multi-lingual) and ICDAR datasets
 
-Future detectors:
-- **DB**: Fast document detection with differentiable binarization
+**DBDetector** features:
+- Differentiable Binarization (DB) for real-time text detection
+- ResNet backbone with Feature Pyramid Network (FPN)
+- Dual head outputs: probability map + adaptive threshold map
+- Differentiable binarization for end-to-end training
+- Fast inference: suitable for real-time applications
+- Configurable thresholds and unclip ratio for box expansion
+- Works well on both document and scene text
+- GPU/CPU support with batch processing
+- Pretrained weights: ResNet50 (base) and MobileNetV3 (fast)
 
 ### Recognizers
 
@@ -439,6 +450,7 @@ Future detectors:
 |------------|------|-------|----------|-----|----------|
 | **TrOCRRecognizer** | Transformer | Slow | Excellent | Yes | Handwritten text, fine-tuning, Ancient Greek |
 | **CRNNRecognizer** | CNN+RNN | Fast | Good | Optional | Printed text, real-time applications, resource-constrained environments |
+| **KrakenRecognizer** | RNN | Medium | Excellent | Optional | Historical documents, Ancient Greek manuscripts, degraded text |
 
 **TrOCRRecognizer** features:
 - HuggingFace transformer model (default: `microsoft/trocr-base-handwritten`)
@@ -458,8 +470,17 @@ Future detectors:
 - Grayscale or RGB input support
 - Pretrained weights available from Deep Text Recognition Benchmark
 
-Future recognizers:
-- **Kraken**: Historical document specialist with Ancient Greek support
+**KrakenRecognizer** features:
+- Specialized for historical document OCR
+- Excellent Ancient Greek support (multiple pretrained models)
+- Handles degraded, noisy, and low-quality documents
+- Supports polytonic Greek with diacritics
+- Built-in layout analysis (optional)
+- Custom model training support
+- Multiple pretrained models: Porson typeface, Medieval Greek, Polytonic Greek
+- Wraps the kraken library (install: `pip install kraken`)
+- Configurable language/script codes
+- Batch processing with configurable batch size (default: 8)
 
 ## Cross-Image Batching Optimization
 
@@ -602,6 +623,34 @@ for word in result.words:
     print(f"'{word.text}' at ({word.bbox.left}, {word.bbox.top})")
 ```
 
+### DB + Kraken for Ancient Greek Manuscripts
+
+```python
+from services.ocr.factory import OCREngineFactory
+from services.ocr.types import DetectorType, RecognizerType
+
+# Create DB + Kraken engine for Ancient Greek documents
+engine = OCREngineFactory.create(
+    detector=DetectorType.DB,
+    recognizer=RecognizerType.KRAKEN,
+    device='cuda',
+    # DB-specific parameters
+    thresh=0.3,              # Binary threshold
+    box_thresh=0.7,          # Box confidence threshold
+    unclip_ratio=1.5,        # Box expansion ratio
+    # Kraken-specific parameters
+    language='grc',          # Ancient Greek
+    recognizer_model_path='models/kraken/kraken_polytonic_greek.mlmodel'
+)
+
+# Process Ancient Greek manuscript
+manuscript = Image.open('greek_manuscript.jpg')
+result = engine.recognize(manuscript)
+
+print(f"Recognized Ancient Greek text:")
+print(result.text)
+```
+
 ### Custom Device and Batch Size
 
 ```python
@@ -714,6 +763,43 @@ pytest tests/test_ocr/test_detectors/test_craft.py -v
 pytest tests/test_ocr/test_recognizers/test_crnn.py -v
 ```
 
+## Installation
+
+### Base Installation
+
+Install the base OCR dependencies:
+```bash
+uv sync
+```
+
+### Component-Specific Dependencies
+
+Install additional dependencies for specific OCR components:
+
+```bash
+# For CRAFT detector
+uv sync --extra craft
+
+# For DB detector
+uv sync --extra db
+
+# For Kraken recognizer
+uv sync --extra kraken
+
+# Install all OCR components
+uv sync --extra ocr-full
+
+# With development dependencies
+uv sync --extra dev --extra ocr-full
+```
+
+**Component Requirements:**
+- **CRAFT**: Requires `scipy` for connected component analysis
+- **DB**: Requires `pyclipper` for polygon operations
+- **Kraken**: Requires `kraken` library (OCR toolkit for historical documents)
+- **CRNN**: No additional dependencies (uses base PyTorch)
+- **TrOCR**: No additional dependencies (uses base transformers + PyTorch)
+
 ## Model Weights
 
 ### Downloading Pretrained Weights
@@ -730,6 +816,12 @@ python models/download_models.py --craft base
 # Download CRNN weights
 python models/download_models.py --crnn base
 
+# Download DB weights
+python models/download_models.py --db base
+
+# Download Kraken weights (Ancient Greek)
+python models/download_models.py --kraken greek
+
 # Download all models
 python models/download_models.py --all
 ```
@@ -743,6 +835,15 @@ python models/download_models.py --all
 **CRNN:**
 - `base` (crnn_vgg_bilstm_ctc.pth): VGG + BiLSTM with CTC, supports digits and lowercase letters
 
+**DB:**
+- `base` (db_resnet50.pth): ResNet50 backbone - best accuracy, multilingual
+- `mobilenet` (db_mobilenet.pth): MobileNetV3 backbone - faster, mobile-friendly
+
+**Kraken:**
+- `greek` (kraken_greek_porson.mlmodel): Ancient Greek Porson typeface
+- `greek_medieval` (kraken_medieval_greek.mlmodel): Medieval Greek manuscripts
+- `polytonic` (kraken_polytonic_greek.mlmodel): Polytonic Greek with diacritics
+
 **Model Registry:**
 
 Models are registered in `models/registry.json` with download URLs and metadata. Downloaded weights are stored in model-specific subdirectories:
@@ -750,8 +851,14 @@ Models are registered in `models/registry.json` with download URLs and metadata.
 models/
 ├── craft/
 │   └── craft_mlt_25k.pth
-└── crnn/
-    └── crnn_vgg_bilstm_ctc.pth
+├── crnn/
+│   └── crnn_vgg_bilstm_ctc.pth
+├── db/
+│   └── db_resnet50.pth
+└── kraken/
+    ├── kraken_greek_porson.mlmodel
+    ├── kraken_medieval_greek.mlmodel
+    └── kraken_polytonic_greek.mlmodel
 ```
 
 ### Using Pretrained Weights
@@ -777,18 +884,19 @@ engine = OCREngineFactory.create(
 
 ## Future Enhancements
 
-### Planned Detectors
-- **DB**: Differentiable Binarization detector
-  - Fast and accurate for printed documents
-  - Configurable thresholds
-  - Source: PaddleOCR or manual PyTorch
+### Potential Future Components
 
-### Planned Recognizers
-- **Kraken**: Historical document specialist
-  - Designed for manuscripts
-  - Ancient Greek language support
-  - Handles degraded text
-  - Source: Kraken library
+All major detector and recognizer types are now implemented. Potential future additions:
+
+**Additional Detectors:**
+- **PSENet**: Progressive Scale Expansion Network for arbitrary-shaped text
+- **EAST**: Efficient and Accurate Scene Text detector
+- **TextSnake**: Detector for curved text
+
+**Additional Recognizers:**
+- **ASTER**: Attentional Scene Text Recognizer with rectification
+- **SAR**: Show, Attend and Read for irregular text
+- **Fine-tuned models**: Custom Ancient Greek models trained on specific manuscripts
 
 ### Ensemble Engines
 Combine multiple engines with voting strategies:

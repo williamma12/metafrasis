@@ -72,11 +72,17 @@ class TextDetector(ABC):
         Setup PyTorch device
 
         Args:
-            device: 'cuda', 'cpu', or None for auto-detect
+            device: 'cuda', 'cpu', 'mps', 'auto', or None for auto-detect
 
         Returns:
             torch.device object
         """
-        if device is None:
-            return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if device is None or device == 'auto':
+            # Auto-detect best available device
+            if torch.cuda.is_available():
+                return torch.device('cuda')
+            elif torch.backends.mps.is_available():
+                return torch.device('mps')
+            else:
+                return torch.device('cpu')
         return torch.device(device)

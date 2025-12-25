@@ -40,6 +40,12 @@ try:
 except ImportError as e:
     print(f"CRAFT detector not available: {e}")
 
+try:
+    from .detectors.db import DBDetector
+    OCREngineFactory.register_detector('db', DBDetector)
+except ImportError as e:
+    print(f"DB detector not available: {e}")
+
 # Register recognizers
 try:
     from .recognizers.trocr import TrOCRRecognizer
@@ -52,3 +58,9 @@ try:
     OCREngineFactory.register_recognizer('crnn', CRNNRecognizer)
 except ImportError as e:
     print(f"CRNN recognizer not available: {e}")
+
+try:
+    from .recognizers.kraken import KrakenRecognizer
+    OCREngineFactory.register_recognizer('kraken', KrakenRecognizer)
+except ImportError as e:
+    print(f"Kraken recognizer not available: {e}")

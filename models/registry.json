@@ -39,5 +39,39 @@
       "filename": "crnn_vgg_bilstm_ctc.pth",
       "description": "CRNN recognizer with VGG backbone and BiLSTM (English characters + digits)"
     }
+  },
+  "db": {
+    "base": {
+      "url": "https://paddleocr.bj.bcebos.com/dygraph_v2.0/en/det_r50_vd_db_v2.0_train.tar",
+      "type": "archive",
+      "filename": "db_resnet50.pth",
+      "description": "DB detector with ResNet50 backbone (multilingual, general purpose)"
+    },
+    "mobilenet": {
+      "url": "https://paddleocr.bj.bcebos.com/dygraph_v2.0/en/det_mv3_db_v2.0_train.tar",
+      "type": "archive",
+      "filename": "db_mobilenet.pth",
+      "description": "DB detector with MobileNetV3 backbone (faster, mobile-friendly)"
+    }
+  },
+  "kraken": {
+    "greek": {
+      "url": "https://zenodo.org/record/2577813/files/porson.mlmodel",
+      "type": "direct",
+      "filename": "kraken_greek_porson.mlmodel",
+      "description": "Kraken model for Ancient Greek (Porson typeface)"
+    },
+    "greek_medieval": {
+      "url": "https://zenodo.org/record/6542744/files/medieval_greek.mlmodel",
+      "type": "direct",
+      "filename": "kraken_medieval_greek.mlmodel",
+      "description": "Kraken model for Medieval Greek manuscripts"
+    },
+    "polytonic": {
+      "url": "https://zenodo.org/record/6657809/files/polytonic_greek.mlmodel",
+      "type": "direct",
+      "filename": "kraken_polytonic_greek.mlmodel",
+      "description": "Kraken model for Polytonic Greek (with diacritics)"
+    }
   }
 }
