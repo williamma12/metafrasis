@@ -29,6 +29,7 @@ export interface AnnotationCanvasState {
   regions: Region[]
   selectedRegionId: string | null
   action: 'add' | 'delete' | 'update' | 'select' | null
+  actionTimestamp?: number
 }
 
 export interface DrawingState {

@@ -7,11 +7,13 @@ Features:
 - Interactive canvas for drawing regions
 - Text input for region labels
 - Auto-detection using existing OCR detectors
+- Auto-save as you annotate
+- Export as zip for download
 """
 import streamlit as st
 from PIL import Image
 from pathlib import Path
-from typing import Optional
+from datetime import datetime
 import shutil
 
 from app.state import AnnotationState
@@ -32,32 +34,15 @@ def get_annotation_state() -> AnnotationState:
     return st.session_state.annotation_state
 
 
-def export_for_detector(storage: AnnotationStorage, state: AnnotationState):
-    """Export dataset for detector training"""
-    if not state.dataset:
-        st.error("No dataset loaded")
+def trigger_autosave(storage: AnnotationStorage, state: AnnotationState):
+    """Save dataset immediately if there are unsaved changes"""
+    if not state.dataset or not state.unsaved_changes:
         return
 
-    try:
-        exporter = AnnotationExporter()
-        output_path = exporter.export_for_detector(state.dataset, storage)
-        st.sidebar.success(f"Exported to {output_path}")
-    except Exception as e:
-        st.sidebar.error(f"Export failed: {e}")
-
-
-def export_for_recognizer(storage: AnnotationStorage, state: AnnotationState):
-    """Export dataset for recognizer training"""
-    if not state.dataset:
-        st.error("No dataset loaded")
-        return
-
-    try:
-        exporter = AnnotationExporter()
-        output_path = exporter.export_for_recognizer(state.dataset, storage)
-        st.sidebar.success(f"Exported to {output_path}")
-    except Exception as e:
-        st.sidebar.error(f"Export failed: {e}")
+    # Update timestamp and save synchronously (fast for JSON files)
+    state.dataset.updated_at = datetime.now()
+    storage.save(state.dataset)
+    state.unsaved_changes = False
 
 
 def render_dataset_sidebar(storage: AnnotationStorage, state: AnnotationState):
@@ -106,27 +91,17 @@ def render_dataset_sidebar(storage: AnnotationStorage, state: AnnotationState):
         st.sidebar.caption(f"Regions: {state.dataset.total_regions}")
         st.sidebar.caption(f"Labeled: {state.dataset.labeled_regions}")
 
-        # Save button
-        if st.sidebar.button("Save Dataset", type="primary", disabled=not state.unsaved_changes):
-            storage.save(state.dataset)
-            state.unsaved_changes = False
-            st.success("Dataset saved!")
-            st.rerun()
-
-        if state.unsaved_changes:
-            st.sidebar.warning("Unsaved changes")
-
-        # Export section
+        # Download section
         st.sidebar.divider()
-        st.sidebar.subheader("Export")
-
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            if st.button("Detector", key="export_detector", use_container_width=True):
-                export_for_detector(storage, state)
-        with col2:
-            if st.button("Recognizer", key="export_recognizer", use_container_width=True):
-                export_for_recognizer(storage, state)
+        exporter = AnnotationExporter()
+        zip_bytes = exporter.export_dataset_bytes(state.dataset, storage)
+        st.sidebar.download_button(
+            label="Download Dataset",
+            data=zip_bytes,
+            file_name=f"{state.dataset.name}.zip",
+            mime="application/zip",
+            use_container_width=True,
+        )
 
 
 def render_image_upload(storage: AnnotationStorage, state: AnnotationState):
@@ -164,6 +139,7 @@ def render_image_upload(storage: AnnotationStorage, state: AnnotationState):
             state.dataset.add_image(annotated_image)
 
         state.unsaved_changes = True
+        trigger_autosave(storage, state)
         st.success(f"Added {len(uploaded_files)} image(s)")
         st.rerun()
 
@@ -250,7 +226,7 @@ def render_drawing_toolbar(state: AnnotationState):
             state.auto_detect_enabled = auto_detect
 
 
-def render_region_sidebar(state: AnnotationState, current_image: AnnotatedImage):
+def render_region_sidebar(storage: AnnotationStorage, state: AnnotationState, current_image: AnnotatedImage):
     """Render region list and editor in sidebar"""
     st.sidebar.divider()
     st.sidebar.header("Regions")
@@ -287,22 +263,27 @@ def render_region_sidebar(state: AnnotationState, current_image: AnnotatedImage)
                 key=f"text_{region.id}",
                 height=100,
             )
-            if new_text != region.text:
+            # Normalize for comparison: both as empty string or actual text
+            current_text = region.text or ""
+            if new_text != current_text:
                 region.text = new_text if new_text else None
                 region.verified = True
                 state.unsaved_changes = True
+                trigger_autosave(storage, state)
 
             # Verified checkbox
             verified = st.sidebar.checkbox("Verified", value=region.verified, key=f"verified_{region.id}")
             if verified != region.verified:
                 region.verified = verified
                 state.unsaved_changes = True
+                trigger_autosave(storage, state)
 
             # Delete button
             if st.sidebar.button("Delete Region", type="secondary", key=f"delete_{region.id}"):
                 current_image.remove_region(region.id)
                 state.selected_region_id = None
                 state.unsaved_changes = True
+                trigger_autosave(storage, state)
                 st.rerun()
 
 
@@ -328,21 +309,31 @@ def render_annotation_canvas(storage: AnnotationStorage, state: AnnotationState,
     # Handle canvas result
     if result:
         new_regions, selected_id, action = parse_canvas_result(result)
+        action_timestamp = result.get("actionTimestamp")
+
+        # Skip if we already processed this action (prevents infinite loop)
+        if action_timestamp and action_timestamp == state.last_action_timestamp:
+            return
 
         if action == "add":
             # Replace all regions with updated list
             current_image.regions = new_regions
             state.selected_region_id = selected_id
             state.unsaved_changes = True
+            state.last_action_timestamp = action_timestamp
+            trigger_autosave(storage, state)
             st.rerun()
         elif action == "delete":
             current_image.regions = new_regions
             state.selected_region_id = None
             state.unsaved_changes = True
+            state.last_action_timestamp = action_timestamp
+            trigger_autosave(storage, state)
             st.rerun()
         elif action == "select":
             if selected_id != state.selected_region_id:
                 state.selected_region_id = selected_id
+                state.last_action_timestamp = action_timestamp
                 st.rerun()
 
 
@@ -386,6 +377,7 @@ def run_auto_detection(storage: AnnotationStorage, state: AnnotationState, curre
                 current_image.add_region(region)
 
             state.unsaved_changes = True
+            trigger_autosave(storage, state)
             st.success(f"Detected {len(regions)} regions")
             st.rerun()
 
@@ -437,7 +429,7 @@ def render_annotation_page():
     current_image = state.dataset.images[state.current_image_idx]
 
     # Region list in sidebar
-    render_region_sidebar(state, current_image)
+    render_region_sidebar(storage, state, current_image)
 
     # Canvas
     render_annotation_canvas(storage, state, current_image)

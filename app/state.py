@@ -29,6 +29,8 @@ class AnnotationState:
     unsaved_changes: bool = False
     # Store loaded dataset in memory
     dataset: Optional["AnnotationDataset"] = None  # Forward reference
+    # Track last processed canvas action to prevent duplicate processing
+    last_action_timestamp: Optional[int] = None
 
 
 def init_session_state():

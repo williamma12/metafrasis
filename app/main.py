@@ -1,7 +1,7 @@
 """
 Metafrasis - Ancient Greek OCR, Transliteration, and Translation
 
-Main application entry point with tab navigation.
+Main application entry point with sidebar navigation.
 """
 import streamlit as st
 
@@ -22,17 +22,25 @@ def main():
     # Initialize session state
     init_session_state()
 
-    # Header
-    st.title("Metafrasis")
-    st.write("Ancient Greek OCR, Transliteration, and Translation")
+    # Initialize current page if not set
+    if "current_page" not in st.session_state:
+        st.session_state.current_page = "OCR"
 
-    # Tab navigation
-    tab_ocr, tab_annotate = st.tabs(["OCR", "Annotate"])
+    # Sidebar navigation
+    st.sidebar.title("Metafrasis")
+    page = st.sidebar.radio(
+        "Navigation",
+        ["OCR", "Annotate"],
+        index=0 if st.session_state.current_page == "OCR" else 1,
+        label_visibility="collapsed",
+    )
+    st.session_state.current_page = page
+    st.sidebar.divider()
 
-    with tab_ocr:
+    # Render selected page
+    if page == "OCR":
         render_ocr_page()
-
-    with tab_annotate:
+    else:
         render_annotation_page()
 
 

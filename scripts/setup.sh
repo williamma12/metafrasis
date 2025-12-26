@@ -188,15 +188,27 @@ echo ""
 
 # Install frontend component dependencies
 echo -e "${BLUE}Installing frontend component dependencies...${NC}"
+
 if [ -d "frontend/ocr_viewer" ]; then
     cd frontend/ocr_viewer
     echo "Running npm install in frontend/ocr_viewer..."
     npm install
     cd ../..
-    echo -e "${GREEN}✓ Frontend dependencies installed${NC}"
+    echo -e "${GREEN}✓ OCR Viewer dependencies installed${NC}"
 else
     echo -e "${RED}Warning: frontend/ocr_viewer directory not found${NC}"
-    echo "Skipping frontend dependencies..."
+    echo "Skipping OCR Viewer dependencies..."
+fi
+
+if [ -d "frontend/annotation_canvas" ]; then
+    cd frontend/annotation_canvas
+    echo "Running npm install in frontend/annotation_canvas..."
+    npm install
+    cd ../..
+    echo -e "${GREEN}✓ Annotation Canvas dependencies installed${NC}"
+else
+    echo -e "${RED}Warning: frontend/annotation_canvas directory not found${NC}"
+    echo "Skipping Annotation Canvas dependencies..."
 fi
 echo ""
 
@@ -282,11 +294,13 @@ echo ""
 echo "To run the application:"
 echo "  uv run streamlit run app.py"
 echo ""
-echo "To develop the frontend component:"
+echo "To develop the frontend components:"
 echo "  cd frontend/ocr_viewer && npm run dev"
+echo "  cd frontend/annotation_canvas && npm run dev"
 echo ""
-echo "To build the frontend component:"
+echo "To build the frontend components:"
 echo "  cd frontend/ocr_viewer && npm run build"
+echo "  cd frontend/annotation_canvas && npm run build"
 echo ""
 echo "To run tests (if --dev was installed):"
 echo "  uv run pytest"

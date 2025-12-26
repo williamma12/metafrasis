@@ -22,6 +22,12 @@ Usage:
     # Load from disk
     loaded = storage.load("my_dataset")
 
+    # Export as zip archive
+    from services.annotation import AnnotationExporter
+    exporter = AnnotationExporter()
+    zip_path = exporter.export_dataset(dataset, storage)  # Saves to data/datasets/
+    zip_bytes = exporter.export_dataset_bytes(dataset, storage)  # For browser download
+
     # Use annotation canvas (in Streamlit app)
     from services.annotation import annotation_canvas
     result = annotation_canvas(pil_image, regions, drawing_mode="rectangle")

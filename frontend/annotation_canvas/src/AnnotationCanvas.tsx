@@ -55,6 +55,7 @@ const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       regions: newRegions,
       selectedRegionId: region.id,
       action: 'add',
+      actionTimestamp: Date.now(),
     })
   }, [regions, sendState])
 
@@ -66,6 +67,7 @@ const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       regions,
       selectedRegionId: regionId,
       action: 'select',
+      actionTimestamp: Date.now(),
     })
   }, [drawingMode, regions, sendState])
 
@@ -78,6 +80,7 @@ const AnnotationCanvas: React.FC<AnnotationCanvasProps> = ({
       regions: newRegions,
       selectedRegionId: null,
       action: 'delete',
+      actionTimestamp: Date.now(),
     })
   }, [regions, sendState])
 
