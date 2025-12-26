@@ -14,13 +14,20 @@ interface Word {
   confidence: number
 }
 
+interface DetectorRegion {
+  bbox: BBox
+  confidence: number
+  index: number
+}
+
 interface OCRViewerProps {
   imageUrl: string
   words: Word[]
+  detectorRegions?: DetectorRegion[]
   defaultVisibility: boolean[]
 }
 
-const OCRViewer: React.FC<OCRViewerProps> = ({ imageUrl, words, defaultVisibility }) => {
+const OCRViewer: React.FC<OCRViewerProps> = ({ imageUrl, words, detectorRegions, defaultVisibility }) => {
   const [visibility, setVisibility] = useState<boolean[]>(defaultVisibility)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null)
@@ -78,6 +85,37 @@ const OCRViewer: React.FC<OCRViewerProps> = ({ imageUrl, words, defaultVisibilit
         viewBox={`0 0 ${imageSize.width} ${imageSize.height}`}
         preserveAspectRatio="xMinYMin meet"
       >
+        {/* Render detector regions if provided */}
+        {detectorRegions && detectorRegions.map((region, idx) => (
+          <g key={`region-${idx}`}>
+            <rect
+              x={region.bbox.left}
+              y={region.bbox.top}
+              width={region.bbox.width}
+              height={region.bbox.height}
+              fill="rgba(255, 100, 100, 0.2)"
+              stroke="red"
+              strokeWidth={2}
+              strokeDasharray="5,5"
+            />
+            {/* Label with region index */}
+            <text
+              x={region.bbox.left + 5}
+              y={region.bbox.top + 15}
+              fill="red"
+              fontSize="12"
+              fontWeight="bold"
+            >
+              #{region.index + 1}
+            </text>
+            {/* Tooltip on hover */}
+            <title>
+              Region #{region.index + 1} | Confidence: {region.confidence >= 0 ? (region.confidence * 100).toFixed(1) + '%' : 'N/A'}
+            </title>
+          </g>
+        ))}
+
+        {/* Render recognized words */}
         {words.map((word, idx) => {
           const fontSize = getFontSize(word.text, word.bbox)
 

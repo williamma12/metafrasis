@@ -208,9 +208,15 @@ __marimo__/
 
 # Metafrasis - Downloaded models (models are hosted externally)
 models/*
+!models/__init__.py
 !models/registry.json
 !models/.gitkeep
 !models/download_models.py
+!models/layers.py
+!models/backbones/
+!models/necks/
+!models/heads/
+!models/composites/
 
 # Metafrasis - Training data and outputs
 data/
@@ -225,6 +231,7 @@ yarn-error.log*
 
 # Frontend build artifacts (built component - keep build/ directory structure but ignore contents for now)
 frontend/ocr_viewer/build/
+frontend/annotation_canvas/build/
 
 # Frontend misc
 .DS_Store

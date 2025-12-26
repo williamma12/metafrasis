@@ -27,6 +27,11 @@ PDF_DPI = 200  # DPI for PDF to image conversion
 # Production mode loads pre-built component from frontend/ocr_viewer/build/
 VIEWER_RELEASE_MODE = os.getenv('VIEWER_RELEASE', 'false').lower() == 'true'
 
+# Annotation Canvas Configuration
+# Development mode connects to Vite dev server at http://localhost:5174
+# Production mode loads pre-built component from frontend/annotation_canvas/build/
+ANNOTATION_CANVAS_RELEASE_MODE = os.getenv('ANNOTATION_CANVAS_RELEASE', 'false').lower() == 'true'
+
 
 def get_device() -> str:
     """

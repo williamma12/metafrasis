@@ -128,9 +128,16 @@ metafrasis/
 │       ├── preprocessing.py    # Shared image preprocessing
 │       └── engines/            # Concrete engine implementations
 ├── utils/                       # Shared utilities
-├── models/
-│   ├── registry.json           # Model URLs (ONLY file committed)
-│   └── [cached models]         # Downloaded models (gitignored)
+├── models/                      # PyTorch model definitions & weights
+│   ├── __init__.py             # Package exports
+│   ├── registry.json           # Model URLs (committed)
+│   ├── download_models.py      # Download script (committed)
+│   ├── layers.py               # Shared building blocks
+│   ├── backbones/              # Feature extractors (VGG, ResNet, MobileNet)
+│   ├── necks/                  # Feature aggregation (FPN, BiLSTM)
+│   ├── heads/                  # Task outputs (CTC, DB head)
+│   ├── composites/             # Full models (CRAFT, DBNet, CRNN, PPOCRModel)
+│   └── [cached weights]        # Downloaded weights (gitignored)
 ├── data/                        # All gitignored
 │   ├── raw/                    # Unlabeled images
 │   ├── annotated/              # Vision-model annotated
