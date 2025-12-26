@@ -299,25 +299,65 @@ services/ocr/
 ├── preprocessing.py         # PDF conversion, image utilities
 ├── cache.py                 # ImageCache for temporary storage
 │
-├── detectors/               # Text detection components
+├── detectors/               # Text detection inference logic
 │   ├── __init__.py
 │   ├── base.py             # TextDetector abstract base class
 │   ├── whole_image.py      # WholeImageDetector (pass-through)
-│   ├── craft.py            # CRAFTDetector (character-level detection)
-│   └── db.py               # DBDetector (differentiable binarization)
+│   ├── craft.py            # CRAFTDetector (imports models.CRAFT)
+│   └── db.py               # DBDetector (imports models.DBNet)
 │
-├── recognizers/             # Text recognition components
+├── recognizers/             # Text recognition inference logic
 │   ├── __init__.py
 │   ├── base.py             # TextRecognizer abstract base class
+│   ├── layers.py           # Re-exports from models (backward compat)
 │   ├── trocr.py            # TrOCRRecognizer (Transformer-based)
-│   ├── crnn.py             # CRNNRecognizer (CNN+RNN with CTC)
+│   ├── crnn.py             # CRNNRecognizer (imports models.CRNN)
+│   ├── ppocr.py            # PPOCRRecognizer (imports models.PPOCRModel)
 │   └── kraken.py           # KrakenRecognizer (historical documents)
 │
 └── engines/                 # OCR engine implementations
     ├── __init__.py
     ├── tesseract.py        # TesseractEngine (monolithic)
     └── pytorch_engine.py   # PyTorchOCREngine (modular composition)
+
+models/                       # PyTorch model definitions
+├── __init__.py              # Package exports (CRAFT, DBNet, CRNN, PPOCRModel, etc.)
+├── layers.py                # Shared building blocks
+├── backbones/               # Feature extractors
+│   ├── vgg.py              # VGG16BN backbone (CRAFT)
+│   ├── resnet.py           # ResNetBackbone (DB)
+│   ├── mobilenet.py        # MobileNetV3Backbone (PP-OCR)
+│   └── crnn_cnn.py         # CRNNCNN backbone
+├── necks/                   # Feature aggregation
+│   ├── fpn.py              # Feature Pyramid Network
+│   └── sequence.py         # BiLSTM, SequenceEncoder
+├── heads/                   # Task outputs
+│   ├── ctc.py              # CTCHead
+│   └── db.py               # DBHead
+└── composites/              # Full model architectures
+    ├── craft.py            # CRAFT (VGG16BN + U-Net decoder)
+    ├── dbnet.py            # DBNet (ResNet + FPN + DBHead)
+    ├── crnn.py             # CRNN (CRNNCNN + BiLSTM)
+    └── ppocr.py            # PPOCRModel (MobileNet + BiLSTM + CTCHead)
 ```
+
+### Architecture Separation
+
+**Model definitions** (nn.Module classes) are in `models/`:
+- Backbones: VGG, ResNet, MobileNet, CRNN CNN
+- Necks: FPN, BiLSTM sequence encoders
+- Heads: CTC, DB detection head
+- Composites: Complete models (CRAFT, DBNet, CRNN, PPOCRModel)
+
+**Inference logic** (preprocessing, postprocessing, loading) is in `services/ocr/`:
+- Detectors: CRAFTDetector, DBDetector, WholeImageDetector
+- Recognizers: TrOCRRecognizer, CRNNRecognizer, PPOCRRecognizer, KrakenRecognizer
+- Engines: TesseractEngine, PyTorchOCREngine
+
+This separation allows:
+- Reuse of model components across different inference pipelines
+- Clear distinction between architecture code and inference code
+- Easy model architecture experimentation without touching inference logic
 
 ## Factory Pattern
 

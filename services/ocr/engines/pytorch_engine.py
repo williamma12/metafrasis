@@ -35,6 +35,7 @@ class PyTorchOCREngine(OCREngine):
         detector: TextDetector,
         recognizer: TextRecognizer,
         batch_size: int = 8,
+        debug_mode: bool = False,
         **kwargs
     ):
         """
@@ -44,12 +45,14 @@ class PyTorchOCREngine(OCREngine):
             detector: TextDetector instance (finds text regions)
             recognizer: TextRecognizer instance (reads text from regions)
             batch_size: Batch size for recognition (default: 8)
+            debug_mode: Store detector regions for debugging (default: False)
             **kwargs: Additional configuration
         """
         super().__init__(**kwargs)
         self.detector = detector
         self.recognizer = recognizer
         self.batch_size = batch_size
+        self.debug_mode = debug_mode
 
     def load_model(self):
         """Load both detector and recognizer models"""
@@ -90,7 +93,8 @@ class PyTorchOCREngine(OCREngine):
         return OCRResult(
             words=words,
             engine_name=self.name,
-            processing_time=processing_time
+            processing_time=processing_time,
+            detector_regions=regions if self.debug_mode else None
         )
 
     def recognize_batch(self, images: List[Image.Image]) -> List[OCRResult]:
@@ -131,7 +135,7 @@ class PyTorchOCREngine(OCREngine):
             batch_words = self.recognizer.recognize_regions(batch_regions)
             all_words.extend(batch_words)
 
-        # Step 4: Reassemble words back to per-image results
+        # Step 4: Reassemble results per image
         results = []
         word_idx = 0
 
@@ -140,11 +144,17 @@ class PyTorchOCREngine(OCREngine):
             image_words = all_words[word_idx:word_idx + num_regions]
             word_idx += num_regions
 
+            # Extract regions for this image (if debug mode)
+            image_regions = None
+            if self.debug_mode:
+                image_regions = all_regions[img_idx]
+
             result = OCRResult(
                 words=image_words,
                 engine_name=self.name,
                 processing_time=0.0,  # Individual timing not meaningful in batch
-                source=f"image_{img_idx+1}"
+                source=f"image_{img_idx+1}",
+                detector_regions=image_regions
             )
             results.append(result)
 

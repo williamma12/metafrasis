@@ -93,17 +93,18 @@ metafrasis/
 │   │   ├── preprocessing.py    # PDF conversion, image utilities
 │   │   ├── cache.py            # Temporary image caching
 │   │   │
-│   │   ├── detectors/          # Text detection components
+│   │   ├── detectors/          # Text detection inference (models in models/)
 │   │   │   ├── base.py        # TextDetector abstract base
 │   │   │   ├── whole_image.py # WholeImageDetector (pass-through)
-│   │   │   ├── craft.py       # CRAFT detector (future)
-│   │   │   └── db.py          # DB detector (future)
+│   │   │   ├── craft.py       # CRAFTDetector (uses models.CRAFT)
+│   │   │   └── db.py          # DBDetector (uses models.DBNet)
 │   │   │
-│   │   ├── recognizers/        # Text recognition components
+│   │   ├── recognizers/        # Text recognition inference (models in models/)
 │   │   │   ├── base.py        # TextRecognizer abstract base
 │   │   │   ├── trocr.py       # TrOCRRecognizer (Transformer-based)
-│   │   │   ├── crnn.py        # CRNN recognizer (future)
-│   │   │   └── kraken.py      # Kraken recognizer (future)
+│   │   │   ├── crnn.py        # CRNNRecognizer (uses models.CRNN)
+│   │   │   ├── ppocr.py       # PPOCRRecognizer (uses models.PPOCRModel)
+│   │   │   └── kraken.py      # KrakenRecognizer (library wrapper)
 │   │   │
 │   │   └── engines/            # OCR engine implementations
 │   │       ├── tesseract.py   # TesseractEngine (monolithic)
@@ -123,10 +124,28 @@ metafrasis/
 │   │   └── dataset_builder.py
 │   └── notebooks/              # Experiments
 │
-├── models/                      # Model management
+├── models/                      # Model definitions & management
+│   ├── __init__.py             # Package exports
 │   ├── registry.json           # Model URLs (IN GIT)
 │   ├── download_models.py      # Download script (IN GIT)
-│   └── [downloaded models]     # (GITIGNORED)
+│   ├── layers.py               # Shared building blocks (ConvBN, SE, CTC, etc.)
+│   ├── backbones/              # Feature extractors
+│   │   ├── vgg.py             # VGG16BN (CRAFT)
+│   │   ├── resnet.py          # ResNetBackbone (DB)
+│   │   ├── mobilenet.py       # MobileNetV3Backbone (PP-OCR)
+│   │   └── crnn_cnn.py        # CRNN CNN backbone
+│   ├── necks/                  # Feature aggregation
+│   │   ├── fpn.py             # Feature Pyramid Network (DB)
+│   │   └── sequence.py        # BiLSTM, SequenceEncoder
+│   ├── heads/                  # Task-specific outputs
+│   │   ├── ctc.py             # CTCHead
+│   │   └── db.py              # DBHead
+│   ├── composites/             # Full model architectures
+│   │   ├── craft.py           # CRAFT detector
+│   │   ├── dbnet.py           # DBNet detector
+│   │   ├── crnn.py            # CRNN recognizer
+│   │   └── ppocr.py           # PPOCRModel recognizer
+│   └── [downloaded weights]    # (GITIGNORED)
 │
 ├── data/                        # Datasets (ALL GITIGNORED)
 │   ├── raw/                    # Unlabeled images

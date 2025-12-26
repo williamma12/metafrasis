@@ -108,7 +108,11 @@ class OCREngineFactory:
         # Import PyTorchOCREngine here to avoid circular import
         from .engines.pytorch_engine import PyTorchOCREngine
 
-        # Create detector and recognizer instances
+        # Extract engine-specific parameters
+        debug_mode = kwargs.pop('debug_mode', False)
+        batch_size = kwargs.pop('batch_size', 8)
+
+        # Create detector and recognizer instances (remaining kwargs)
         detector_instance = cls._detectors[detector](**kwargs)
         recognizer_instance = cls._recognizers[recognizer](**kwargs)
 
@@ -116,7 +120,8 @@ class OCREngineFactory:
         return PyTorchOCREngine(
             detector=detector_instance,
             recognizer=recognizer_instance,
-            **kwargs
+            batch_size=batch_size,
+            debug_mode=debug_mode
         )
 
     @classmethod

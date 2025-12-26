@@ -16,6 +16,8 @@ class RecognizerType(str, Enum):
     TROCR = "trocr"
     CRNN = "crnn"
     KRAKEN = "kraken"
+    PPOCR = "ppocr"
+    PPOCR_ONNX = "ppocr_onnx"
 
 
 class EngineType(str, Enum):

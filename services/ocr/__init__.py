@@ -64,3 +64,15 @@ try:
     OCREngineFactory.register_recognizer('kraken', KrakenRecognizer)
 except ImportError as e:
     print(f"Kraken recognizer not available: {e}")
+
+try:
+    from .recognizers.ppocr import PPOCRRecognizer
+    OCREngineFactory.register_recognizer('ppocr', PPOCRRecognizer)
+except ImportError as e:
+    print(f"PP-OCR recognizer not available: {e}")
+
+try:
+    from .recognizers.ppocr_onnx import PPOCROnnxRecognizer
+    OCREngineFactory.register_recognizer('ppocr_onnx', PPOCROnnxRecognizer)
+except ImportError as e:
+    print(f"PP-OCR ONNX recognizer not available: {e}")

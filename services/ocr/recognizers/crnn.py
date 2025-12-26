@@ -8,139 +8,14 @@ Based on: "An End-to-End Trainable Neural Network for Image-based Sequence
 Recognition and Its Application to Scene Text Recognition" (TPAMI 2016)
 """
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
 from typing import List, Optional
 from PIL import Image
 from pathlib import Path
 
-from ..base import Word, BoundingBox, TextRegion, DEFAULT_CONFIDENCE
+from ..base import Word, TextRegion
 from .base import TextRecognizer
-
-
-class BidirectionalLSTM(nn.Module):
-    """Bidirectional LSTM layer"""
-
-    def __init__(self, nIn, nHidden, nOut):
-        super(BidirectionalLSTM, self).__init__()
-        self.rnn = nn.LSTM(nIn, nHidden, bidirectional=True, batch_first=True)
-        self.embedding = nn.Linear(nHidden * 2, nOut)
-
-    def forward(self, input):
-        """
-        Args:
-            input: [T, B, nIn] (when batch_first=False) or [B, T, nIn] (when batch_first=True)
-
-        Returns:
-            [T, B, nOut]
-        """
-        self.rnn.flatten_parameters()
-        recurrent, _ = self.rnn(input)  # [B, T, 2*nHidden] since batch_first=True
-
-        # Permute to [T, B, 2*nHidden] for consistency
-        recurrent = recurrent.permute(1, 0, 2)  # [T, B, 2*nHidden]
-        T, b, h = recurrent.size()
-
-        # Use reshape instead of view for safety (works even if not contiguous)
-        t_rec = recurrent.reshape(T * b, h)
-
-        output = self.embedding(t_rec)  # [T * b, nOut]
-        output = output.reshape(T, b, -1)
-
-        return output
-
-
-class CRNN(nn.Module):
-    """
-    CRNN architecture for text recognition
-
-    Architecture:
-        - CNN: Feature extraction from images
-        - RNN: Bidirectional LSTM for sequence modeling
-        - CTC: Connectionist Temporal Classification for decoding
-    """
-
-    def __init__(self, img_height=32, num_channels=1, num_classes=37, nh=256):
-        """
-        Args:
-            img_height: Height of input images
-            num_channels: Number of input channels (1 for grayscale, 3 for RGB)
-            num_classes: Number of output classes (charset size + blank token)
-            nh: Number of hidden units in LSTM
-        """
-        super(CRNN, self).__init__()
-
-        assert img_height % 16 == 0, 'img_height must be divisible by 16'
-
-        self.num_classes = num_classes
-
-        # CNN backbone
-        # Input: [B, num_channels, 32, W]
-        self.cnn = nn.Sequential(
-            # Conv 1
-            nn.Conv2d(num_channels, 64, 3, 1, 1),
-            nn.ReLU(True),
-            nn.MaxPool2d(2, 2),  # [B, 64, 16, W/2]
-
-            # Conv 2
-            nn.Conv2d(64, 128, 3, 1, 1),
-            nn.ReLU(True),
-            nn.MaxPool2d(2, 2),  # [B, 128, 8, W/4]
-
-            # Conv 3
-            nn.Conv2d(128, 256, 3, 1, 1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(True),
-
-            # Conv 4
-            nn.Conv2d(256, 256, 3, 1, 1),
-            nn.ReLU(True),
-            nn.MaxPool2d((2, 2), (2, 1), (0, 1)),  # [B, 256, 4, W/4+1]
-
-            # Conv 5
-            nn.Conv2d(256, 512, 3, 1, 1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(True),
-
-            # Conv 6
-            nn.Conv2d(512, 512, 3, 1, 1),
-            nn.ReLU(True),
-            nn.MaxPool2d((2, 2), (2, 1), (0, 1)),  # [B, 512, 2, W/4+1]
-
-            # Conv 7
-            nn.Conv2d(512, 512, 2, 1, 0),
-            nn.BatchNorm2d(512),
-            nn.ReLU(True)  # [B, 512, 1, W/4]
-        )
-
-        # RNN
-        self.rnn = nn.Sequential(
-            BidirectionalLSTM(512, nh, nh),
-            BidirectionalLSTM(nh, nh, num_classes)
-        )
-
-    def forward(self, input):
-        """
-        Args:
-            input: Image tensor [B, C, H, W]
-
-        Returns:
-            CTC output [T, B, num_classes] where T is sequence length
-        """
-        # CNN
-        conv = self.cnn(input)  # [B, 512, 1, W/4]
-
-        # Prepare for RNN
-        b, c, h, w = conv.size()
-        assert h == 1, "the height of conv must be 1"
-        conv = conv.squeeze(2)  # [B, 512, W/4]
-        conv = conv.permute(2, 0, 1)  # [W/4, B, 512]
-
-        # RNN
-        output = self.rnn(conv)  # [T, B, num_classes]
-
-        return output
+from models import CRNN, CTCDecoder, get_charset
 
 
 class CRNNRecognizer(TextRecognizer):
@@ -176,16 +51,14 @@ class CRNNRecognizer(TextRecognizer):
 
         # Add blank token for CTC
         self.charset = charset
-        self.blank_token = len(charset)  # Blank is the last index
         self.num_classes = len(charset) + 1  # +1 for blank
 
         self.img_height = img_height
         self.img_width = img_width
         self.num_channels = num_channels
 
-        # Character mappings
-        self.char_to_idx = {char: idx for idx, char in enumerate(charset)}
-        self.idx_to_char = {idx: char for idx, char in enumerate(charset)}
+        # CTC decoder (shared utility)
+        self.decoder = CTCDecoder(charset)
 
         self.model = None
 
@@ -205,7 +78,7 @@ class CRNNRecognizer(TextRecognizer):
             img_height=self.img_height,
             num_channels=self.num_channels,
             num_classes=self.num_classes,
-            nh=256
+            hidden_size=256
         )
 
         # Load pretrained weights if provided
@@ -355,45 +228,9 @@ class CRNNRecognizer(TextRecognizer):
         Returns:
             List of decoded text strings
         """
-        # Get most likely class at each timestep (greedy decoding)
-        _, max_indices = preds.max(2)  # [T, B]
-        max_indices = max_indices.transpose(0, 1)  # [B, T]
+        # Convert from [T, B, C] to [B, T, C] for CTCDecoder
+        preds = preds.permute(1, 0, 2)
 
-        texts = []
-        for indices in max_indices:
-            # CTC decode: remove blanks and repeated characters
-            text = self._ctc_decode(indices.cpu().numpy())
-            texts.append(text)
-
+        # Use shared CTC decoder
+        texts, _ = self.decoder.decode_batch(preds)
         return texts
-
-    def _ctc_decode(self, indices: np.ndarray) -> str:
-        """
-        CTC greedy decoder
-
-        Args:
-            indices: Array of predicted class indices [T]
-
-        Returns:
-            Decoded text string
-        """
-        chars = []
-        prev_idx = None
-
-        for idx in indices:
-            # Skip blank token
-            if idx == self.blank_token:
-                prev_idx = None
-                continue
-
-            # Skip repeated characters (CTC merge rule)
-            if idx == prev_idx:
-                continue
-
-            # Add character
-            if idx in self.idx_to_char:
-                chars.append(self.idx_to_char[idx])
-
-            prev_idx = idx
-
-        return ''.join(chars)

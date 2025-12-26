@@ -60,6 +60,7 @@ class OCRResult:
     engine_name: str
     processing_time: float
     source: str = ""  # Optional: source identifier (e.g., "page_1"), set by caller
+    detector_regions: Optional[List['TextRegion']] = None  # Debug: original detector regions before recognition
 
     @property
     def confidence_stats(self) -> ConfidenceStats:
