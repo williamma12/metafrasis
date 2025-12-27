@@ -1,0 +1,29 @@
+# PP-OCR Text Recognizer Training Configuration
+# Usage: python -m training.finetune.train_ppocr --config training/configs/ppocr.yaml
+
+# Data
+data_dir: data/exports/recognizer
+output_dir: training/outputs/ppocr
+
+# Model (lightweight MobileNetV3)
+hidden_size: 48
+num_layers: 2
+
+# Training
+epochs: 100
+batch_size: 64
+learning_rate: 0.001
+weight_decay: 0.00001
+warmup_epochs: 5
+patience: 15
+scheduler: cosine
+
+# Gradient accumulation (for larger effective batch size)
+accumulation_steps: 2
+
+# Input
+img_height: 32
+img_width: 320
+
+# Workers
+num_workers: 4

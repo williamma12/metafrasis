@@ -1,0 +1,26 @@
+# CRNN Text Recognizer Training Configuration
+# Usage: python -m training.finetune.train_crnn --config training/configs/crnn.yaml
+
+# Data
+data_dir: data/exports/recognizer
+output_dir: training/outputs/crnn
+
+# Model
+hidden_size: 256
+num_layers: 2
+
+# Training
+epochs: 100
+batch_size: 32
+learning_rate: 0.001
+weight_decay: 0.0001
+warmup_epochs: 5
+patience: 10
+scheduler: cosine
+
+# Input
+img_height: 32
+img_width: 128
+
+# Workers
+num_workers: 4

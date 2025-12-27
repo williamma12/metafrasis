@@ -52,6 +52,11 @@ class CRNNRecognizer(TextRecognizer):
         # Add blank token for CTC
         self.charset = charset
         self.num_classes = len(charset) + 1  # +1 for blank
+        self.blank_token = len(charset)  # Blank is last index
+
+        # Character mappings
+        self.char_to_idx = {char: idx for idx, char in enumerate(charset)}
+        self.idx_to_char = {idx: char for idx, char in enumerate(charset)}
 
         self.img_height = img_height
         self.img_width = img_width
@@ -234,3 +239,29 @@ class CRNNRecognizer(TextRecognizer):
         # Use shared CTC decoder
         texts, _ = self.decoder.decode_batch(preds)
         return texts
+
+    def _ctc_decode(self, indices: np.ndarray) -> str:
+        """
+        Decode a single CTC sequence (greedy decoding).
+
+        Args:
+            indices: Array of class indices [T]
+
+        Returns:
+            Decoded text string
+        """
+        if len(indices) == 0:
+            return ""
+
+        # Remove blanks and merge repeated characters
+        chars = []
+        prev_idx = None
+
+        for idx in indices:
+            if idx != self.blank_token:
+                if idx != prev_idx:
+                    if idx in self.idx_to_char:
+                        chars.append(self.idx_to_char[idx])
+            prev_idx = idx
+
+        return "".join(chars)

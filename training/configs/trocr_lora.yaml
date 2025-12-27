@@ -1,0 +1,38 @@
+# trOCR with LoRA Fine-tuning Configuration
+# Usage: python -m training.finetune.train_trocr --config training/configs/trocr_lora.yaml
+
+# Data
+data_dir: data/exports/recognizer
+output_dir: training/outputs/trocr_lora
+
+# Base model
+model_name: microsoft/trocr-base-handwritten
+
+# LoRA configuration
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.1
+target_modules:
+  - q_proj
+  - v_proj
+
+# Training
+epochs: 20
+batch_size: 8
+learning_rate: 0.00005
+weight_decay: 0.01
+warmup_epochs: 2
+patience: 5
+
+# Gradient accumulation (for larger effective batch size with limited VRAM)
+accumulation_steps: 4
+
+# Sequence length
+max_length: 64
+
+# Workers
+num_workers: 4
+
+# HuggingFace Hub upload (optional)
+# push_to_hub: true
+# hub_repo_id: your-username/trocr-ancient-greek-lora
