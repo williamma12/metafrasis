@@ -10,6 +10,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent
 MODELS_DIR = PROJECT_ROOT / "models"
 DATA_DIR = PROJECT_ROOT / "data"
+MODEL_WEIGHTS_DIR = DATA_DIR / "model_weights"
 LEXICON_DIR = DATA_DIR / "lexicon"
 
 # UI settings

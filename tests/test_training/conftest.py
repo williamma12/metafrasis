@@ -7,13 +7,13 @@ from datetime import datetime
 import numpy as np
 from PIL import Image
 
-from services.annotation import (
+from services.annotation.models import (
     AnnotationDataset,
     AnnotatedImage,
     Region,
     Point,
-    AnnotationStorage,
 )
+from services.annotation.storage import AnnotationStorage
 
 
 @pytest.fixture
@@ -112,7 +112,7 @@ def sample_dataset(sample_annotated_image):
 @pytest.fixture
 def sample_storage(temp_dir, sample_image):
     """Create storage with sample image."""
-    storage = AnnotationStorage(base_dir=temp_dir)
+    storage = AnnotationStorage(base_path=temp_dir)
 
     # Create dataset directory and copy image
     dataset_dir = temp_dir / "test_dataset"

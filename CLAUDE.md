@@ -89,12 +89,12 @@ New engines are registered in `OCREngineFactory` (`services/ocr/factory.py`). To
 1. `models/registry.json` (committed) contains URLs and metadata
 2. Engine loads model using `config.get_model_path(engine_name, variant)`
 3. If not cached locally, model is downloaded from URL in registry
-4. Downloaded models are cached in `models/` (gitignored except registry.json)
+4. Downloaded weights are cached in `data/model_weights/` (gitignored)
 
 When adding a new model:
 1. Host it externally (HuggingFace Hub recommended)
 2. Add entry to `models/registry.json` with URL and type
-3. Engine will download on first use
+3. Engine will download on first use to `data/model_weights/<model_type>/`
 
 ### Data Flow
 
@@ -128,7 +128,7 @@ metafrasis/
 │       ├── preprocessing.py    # Shared image preprocessing
 │       └── engines/            # Concrete engine implementations
 ├── utils/                       # Shared utilities
-├── models/                      # PyTorch model definitions & weights
+├── models/                      # PyTorch model definitions (code only)
 │   ├── __init__.py             # Package exports
 │   ├── registry.json           # Model URLs (committed)
 │   ├── download_models.py      # Download script (committed)
@@ -136,9 +136,9 @@ metafrasis/
 │   ├── backbones/              # Feature extractors (VGG, ResNet, MobileNet)
 │   ├── necks/                  # Feature aggregation (FPN, BiLSTM)
 │   ├── heads/                  # Task outputs (CTC, DB head)
-│   ├── composites/             # Full models (CRAFT, DBNet, CRNN, PPOCRModel)
-│   └── [cached weights]        # Downloaded weights (gitignored)
+│   └── composites/             # Full models (CRAFT, DBNet, CRNN, PPOCRModel)
 ├── data/                        # All gitignored
+│   ├── model_weights/          # Downloaded model weights
 │   ├── raw/                    # Unlabeled images
 │   ├── annotated/              # Vision-model annotated
 │   ├── reviewed/               # Manually corrected

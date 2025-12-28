@@ -22,12 +22,21 @@ class MockModel(nn.Module):
         return self.linear(x)
 
 
+class MockDataset:
+    """Mock dataset for testing."""
+    pass
+
+
 class ConcreteTrainer(BaseTrainer):
     """Concrete implementation of BaseTrainer for testing."""
 
     @property
     def name(self) -> str:
         return "test_trainer"
+
+    @property
+    def dataset_class(self) -> type:
+        return MockDataset
 
     def create_model(self) -> nn.Module:
         return MockModel()

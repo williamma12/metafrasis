@@ -7,7 +7,10 @@ dataset loading, loss computation, and metric evaluation.
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from training.evaluate.detectors import PrecisionRecallF1Metric
 
 import numpy as np
 import torch
@@ -15,6 +18,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from PIL import Image
 
+from services.annotation.models import AnnotationDataset, Region
+from services.annotation.storage import AnnotationStorage
+from training.evaluate.detectors import PrecisionRecallF1Metric
 from ..base import BaseTrainer
 
 
@@ -22,7 +28,12 @@ class DetectorDataset(Dataset):
     """
     Base dataset class for detector training.
 
-    Loads images and pre-generated target maps from disk.
+    Supports two data formats:
+    1. Annotation format: Load directly from AnnotationDataset JSON files
+    2. Exported format: Load pre-generated target maps from disk
+
+    For annotation format, set `annotation_dataset` parameter.
+    For exported format, the data_dir should contain images/ and targets/ subdirs.
     """
 
     def __init__(
@@ -30,27 +41,99 @@ class DetectorDataset(Dataset):
         data_dir: Path,
         img_size: int = 640,
         augment: bool = False,
+        annotation_dataset: Optional[AnnotationDataset] = None,
+        storage: Optional[AnnotationStorage] = None,
     ):
         self.data_dir = Path(data_dir)
         self.img_size = img_size
         self.augment = augment
 
-        self.images_dir = self.data_dir / "images"
-        self.targets_dir = self.data_dir / "targets"
+        # Annotation-based loading
+        self.annotation_dataset = annotation_dataset
+        self.storage = storage
+        self.use_annotations = annotation_dataset is not None
 
-        self.samples = sorted(self.images_dir.glob("*.png"))
-        if not self.samples:
-            self.samples = sorted(self.images_dir.glob("*.jpg"))
+        if self.use_annotations:
+            # Load from annotation dataset
+            self.samples = list(range(len(annotation_dataset.images)))
+        else:
+            # Load from exported format
+            self.images_dir = self.data_dir / "images"
+            self.targets_dir = self.data_dir / "targets"
+
+            self.samples = sorted(self.images_dir.glob("*.png"))
+            if not self.samples:
+                self.samples = sorted(self.images_dir.glob("*.jpg"))
 
     def __len__(self) -> int:
         return len(self.samples)
 
     @abstractmethod
     def load_targets(self, sample_name: str) -> Dict[str, np.ndarray]:
-        """Load target maps for a sample. Override in subclass."""
+        """Load target maps for a sample from exported format. Override in subclass."""
+        pass
+
+    @abstractmethod
+    def generate_targets(
+        self, image: Image.Image, regions: List[Region]
+    ) -> Dict[str, np.ndarray]:
+        """Generate target maps from regions. Override in subclass."""
         pass
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        if self.use_annotations:
+            return self._getitem_annotation(idx)
+        else:
+            return self._getitem_exported(idx)
+
+    def _getitem_annotation(self, idx: int) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        """Load item from annotation dataset."""
+        annotated_image = self.annotation_dataset.images[idx]
+
+        # Load image
+        image_path = self.storage.get_image_path(annotated_image.image_path)
+        image = Image.open(image_path).convert("RGB")
+        original_size = image.size
+
+        # Resize image
+        image = image.resize((self.img_size, self.img_size), Image.Resampling.BILINEAR)
+
+        # Scale region points to match resized image
+        scale_x = self.img_size / original_size[0]
+        scale_y = self.img_size / original_size[1]
+
+        from services.annotation.models import Point
+        scaled_regions = []
+        for region in annotated_image.regions:
+            scaled_points = [
+                Point(x=p.x * scale_x, y=p.y * scale_y)
+                for p in region.points
+            ]
+            scaled_region = Region(
+                id=region.id,
+                type=region.type,
+                points=scaled_points,
+                text=region.text,
+                auto_detected=region.auto_detected,
+                verified=region.verified,
+            )
+            scaled_regions.append(scaled_region)
+
+        # Generate target maps
+        targets = self.generate_targets(image, scaled_regions)
+
+        # Preprocess image
+        image_array = np.array(image, dtype=np.float32) / 255.0
+        mean = np.array([0.485, 0.456, 0.406])
+        std = np.array([0.229, 0.224, 0.225])
+        image_array = (image_array - mean) / std
+        image_tensor = torch.tensor(image_array).permute(2, 0, 1).float()
+
+        targets = {k: torch.tensor(v).float() for k, v in targets.items()}
+        return image_tensor, targets
+
+    def _getitem_exported(self, idx: int) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+        """Load item from exported format."""
         image_path = self.samples[idx]
         sample_name = image_path.stem
 
@@ -84,48 +167,28 @@ class DetectorTrainer(BaseTrainer):
     - Validation with detection metrics
     """
 
+    def __init__(self, config: Dict[str, Any]):
+        """
+        Initialize detector trainer.
+
+        Args:
+            config: Training configuration dictionary
+        """
+        super().__init__(config)
+        self.eval_metric = PrecisionRecallF1Metric(
+            iou_threshold=config.get("iou_threshold", 0.5)
+        )
+
     @property
     def dataset_class(self) -> type:
         """Return the dataset class to use. Override in subclass."""
         return DetectorDataset
 
-    def create_dataloaders(self) -> Tuple[DataLoader, DataLoader]:
-        """Create train and validation dataloaders."""
-        data_dir = Path(self.config["data_dir"])
-        img_size = self.config.get("img_size", 640)
-        batch_size = self.config.get("batch_size", 16)
-        num_workers = self.config.get("num_workers", 4)
-
-        train_dataset = self.dataset_class(
-            data_dir / "train",
-            img_size=img_size,
-            augment=True,
-        )
-
-        val_dataset = self.dataset_class(
-            data_dir / "val",
-            img_size=img_size,
-            augment=False,
-        )
-
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=num_workers,
-        )
-
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=num_workers,
-        )
-
-        self.logger.info(f"Train samples: {len(train_dataset)}")
-        self.logger.info(f"Val samples: {len(val_dataset)}")
-
-        return train_loader, val_loader
+    def get_dataset_kwargs(self) -> Dict[str, Any]:
+        """Return dataset-specific kwargs for detectors."""
+        return {
+            "img_size": self.config.get("img_size", 640),
+        }
 
     def train_step(self, batch: Any) -> Dict[str, float]:
         """
@@ -203,3 +266,46 @@ class DetectorTrainer(BaseTrainer):
         avg_losses["val_loss"] = total_loss / n
 
         return avg_losses
+
+    def outputs_to_polygons(
+        self, outputs: Any, threshold: float = 0.5
+    ) -> List[np.ndarray]:
+        """
+        Post-process model outputs to polygon predictions.
+
+        Override this method to enable detection metrics computation.
+        Returns empty list by default (metrics will be skipped).
+
+        Args:
+            outputs: Model outputs (e.g., heatmaps)
+            threshold: Detection threshold
+
+        Returns:
+            List of predicted polygons as [N, 2] arrays
+        """
+        return []
+
+    def compute_detection_metrics(
+        self,
+        predictions: List[np.ndarray],
+        targets: List[np.ndarray],
+    ) -> Dict[str, float]:
+        """
+        Compute detection metrics (precision, recall, F1).
+
+        Args:
+            predictions: List of predicted polygons
+            targets: List of target polygons
+
+        Returns:
+            Dictionary of metric values
+        """
+        if not predictions or not targets:
+            return {}
+
+        result = self.eval_metric.compute(predictions, targets)
+        return {
+            "precision": result.details["precision"],
+            "recall": result.details["recall"],
+            "f1": result.details["f1"],
+        }

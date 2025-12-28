@@ -17,12 +17,12 @@ class TestAnnotationStorageInit:
     """Tests for AnnotationStorage initialization"""
 
     def test_storage_creates_directories(self, tmp_path):
-        """Test storage creates base and images directories"""
+        """Test storage creates base directory"""
         base_path = tmp_path / "new_storage"
         storage = AnnotationStorage(base_path=base_path)
 
         assert base_path.exists()
-        assert (base_path / "images").exists()
+        # Note: images directory is now per-dataset, not at root
 
     def test_storage_default_path(self):
         """Test storage uses default path when none provided"""
@@ -40,7 +40,8 @@ class TestAnnotationStorageSaveLoad:
 
         assert path.exists()
         assert path.suffix == ".json"
-        assert path.stem == sample_dataset.name
+        assert path.name == "dataset.json"  # New structure: <name>/dataset.json
+        assert path.parent.name == sample_dataset.name
 
     def test_load_dataset(self, temp_storage, sample_dataset):
         """Test loading a dataset"""
@@ -168,8 +169,9 @@ class TestAnnotationStorageImages:
         # Copy to storage
         relative_path = temp_storage.copy_image(source_path, "test_dataset")
 
-        assert relative_path == "images/test_dataset/source_image.png"
-        assert (temp_storage.base_path / relative_path).exists()
+        # New structure: path is relative to dataset dir
+        assert relative_path == "images/source_image.png"
+        assert temp_storage.get_image_path_for_dataset("test_dataset", relative_path).exists()
 
     def test_copy_image_collision(self, temp_storage, sample_image, tmp_path):
         """Test copying images with same name"""
@@ -215,3 +217,82 @@ class TestAnnotationStorageStats:
         stats = temp_storage.get_dataset_stats("nonexistent")
 
         assert stats is None
+
+
+class TestAnnotationStorageDeleteImage:
+    """Tests for deleting images from datasets"""
+
+    def test_delete_image(self, temp_storage, sample_image, tmp_path):
+        """Test deleting an image from a dataset"""
+        # Create dataset with image
+        source_path = tmp_path / "test_image.png"
+        sample_image.save(source_path)
+
+        dataset = AnnotationDataset(name="test_dataset")
+        relative_path = temp_storage.copy_image(source_path, "test_dataset")
+        image = AnnotatedImage(
+            id="img_001",
+            image_path=relative_path,
+            width=100,
+            height=100,
+        )
+        dataset.add_image(image)
+        temp_storage.save(dataset)
+
+        # Verify image file exists (use new path method)
+        assert temp_storage.get_image_path_for_dataset("test_dataset", relative_path).exists()
+
+        # Delete the image
+        result = temp_storage.delete_image("test_dataset", "img_001")
+
+        assert result is True
+
+        # Verify image removed from dataset
+        loaded = temp_storage.load("test_dataset")
+        assert len(loaded.images) == 0
+
+        # Verify image file deleted
+        assert not temp_storage.get_image_path_for_dataset("test_dataset", relative_path).exists()
+
+    def test_delete_image_keep_file(self, temp_storage, sample_image, tmp_path):
+        """Test deleting an image but keeping the file"""
+        source_path = tmp_path / "test_image.png"
+        sample_image.save(source_path)
+
+        dataset = AnnotationDataset(name="test_dataset")
+        relative_path = temp_storage.copy_image(source_path, "test_dataset")
+        image = AnnotatedImage(
+            id="img_001",
+            image_path=relative_path,
+            width=100,
+            height=100,
+        )
+        dataset.add_image(image)
+        temp_storage.save(dataset)
+
+        # Delete image but keep file
+        result = temp_storage.delete_image("test_dataset", "img_001", delete_file=False)
+
+        assert result is True
+
+        # Verify image removed from dataset
+        loaded = temp_storage.load("test_dataset")
+        assert len(loaded.images) == 0
+
+        # Verify image file still exists (use new path method)
+        assert temp_storage.get_image_path_for_dataset("test_dataset", relative_path).exists()
+
+    def test_delete_image_not_found(self, temp_storage):
+        """Test deleting a non-existent image"""
+        dataset = AnnotationDataset(name="test_dataset")
+        temp_storage.save(dataset)
+
+        result = temp_storage.delete_image("test_dataset", "nonexistent_id")
+
+        assert result is False
+
+    def test_delete_image_dataset_not_found(self, temp_storage):
+        """Test deleting an image from non-existent dataset"""
+        result = temp_storage.delete_image("nonexistent_dataset", "img_001")
+
+        assert result is False

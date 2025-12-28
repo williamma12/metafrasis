@@ -330,3 +330,7 @@ class TrOCRTrainer(TransformerRecognizerTrainer):
             "epochs_trained": epoch + 1,
             "output_dir": str(self.output_dir),
         }
+
+
+if __name__ == "__main__":
+    TrOCRTrainer.main()

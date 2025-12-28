@@ -23,7 +23,7 @@ class TestAnnotationExporterInit:
         """Test exporter uses default path when none provided"""
         exporter = AnnotationExporter()
 
-        assert exporter.output_dir == Path("data/datasets")
+        assert exporter.output_dir == Path("data/exports")
 
     def test_exporter_custom_path(self, tmp_path):
         """Test exporter uses custom path when provided"""
@@ -239,3 +239,79 @@ class TestAnnotationExporterZipContents:
             assert metadata["total_regions"] == dataset.total_regions
             assert metadata["labeled_regions"] == dataset.labeled_regions
             assert metadata["version"] == dataset.version
+
+
+class TestAnnotationExporterExportToDirectory:
+    """Tests for export_to_directory method"""
+
+    def test_export_to_directory_creates_dir(self, storage_with_images, temp_exporter):
+        """Test export creates a directory structure"""
+        storage, dataset = storage_with_images
+
+        export_dir = temp_exporter.export_to_directory(dataset, storage)
+
+        assert export_dir.exists()
+        assert export_dir.is_dir()
+        assert (export_dir / "dataset.json").exists()
+        assert (export_dir / "metadata.json").exists()
+        assert (export_dir / "images").is_dir()
+
+    def test_export_to_directory_contains_images(self, storage_with_images, temp_exporter):
+        """Test exported directory contains all images"""
+        storage, dataset = storage_with_images
+
+        export_dir = temp_exporter.export_to_directory(dataset, storage)
+
+        images_dir = export_dir / "images"
+        image_files = list(images_dir.glob("*"))
+
+        assert len(image_files) == len(dataset.images)
+
+    def test_export_to_directory_updates_paths(self, storage_with_images, temp_exporter):
+        """Test that image paths in dataset.json are updated to exported structure"""
+        storage, dataset = storage_with_images
+
+        export_dir = temp_exporter.export_to_directory(dataset, storage)
+
+        # Load exported dataset
+        with open(export_dir / "dataset.json") as f:
+            exported = AnnotationDataset.from_json(f.read())
+
+        # All paths should start with images/
+        for image in exported.images:
+            assert image.image_path.startswith("images/")
+
+    def test_export_to_directory_custom_name(self, storage_with_images, temp_exporter):
+        """Test export with custom output name"""
+        storage, dataset = storage_with_images
+
+        export_dir = temp_exporter.export_to_directory(
+            dataset, storage, output_name="custom_export"
+        )
+
+        assert export_dir.name == "custom_export"
+        assert export_dir.exists()
+
+    def test_export_to_directory_overwrites_existing(self, storage_with_images, temp_exporter):
+        """Test that exporting to same directory overwrites it"""
+        storage, dataset = storage_with_images
+
+        # Export twice
+        export_dir1 = temp_exporter.export_to_directory(dataset, storage)
+        export_dir2 = temp_exporter.export_to_directory(dataset, storage)
+
+        assert export_dir1 == export_dir2
+        assert export_dir2.exists()
+
+    def test_export_to_directory_metadata(self, storage_with_images, temp_exporter):
+        """Test that metadata.json is created correctly"""
+        storage, dataset = storage_with_images
+
+        export_dir = temp_exporter.export_to_directory(dataset, storage)
+
+        with open(export_dir / "metadata.json") as f:
+            metadata = json.load(f)
+
+        assert metadata["dataset_name"] == dataset.name
+        assert metadata["num_images"] == len(dataset.images)
+        assert "exported_at" in metadata

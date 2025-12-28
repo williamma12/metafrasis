@@ -7,14 +7,18 @@ Provides common functionality for training loops:
 - Logging setup
 - Learning rate scheduling
 - Early stopping
+- Dataset extraction from zip files
 """
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Callable
+from typing import Dict, Any, Optional, List, Callable, Tuple
 import json
 import logging
+import shutil
+import tempfile
 import yaml
+import zipfile
 import torch
 from datetime import datetime
 
@@ -387,3 +391,89 @@ def count_parameters(model: torch.nn.Module) -> Dict[str, int]:
         "trainable": trainable,
         "frozen": total - trainable,
     }
+
+
+def extract_dataset_zip(zip_path: Path, extract_dir: Optional[Path] = None) -> Path:
+    """
+    Extract a dataset zip file for training.
+
+    The zip file should contain:
+    - dataset.json: Annotation dataset
+    - images/: Directory with image files
+    - metadata.json (optional): Export metadata
+
+    Args:
+        zip_path: Path to the zip file
+        extract_dir: Directory to extract to. If None, creates a temp directory.
+
+    Returns:
+        Path to the extracted directory
+    """
+    zip_path = Path(zip_path)
+
+    if not zip_path.exists():
+        raise FileNotFoundError(f"Zip file not found: {zip_path}")
+
+    if not zipfile.is_zipfile(zip_path):
+        raise ValueError(f"Not a valid zip file: {zip_path}")
+
+    # Create extraction directory
+    if extract_dir is None:
+        extract_dir = Path(tempfile.mkdtemp(prefix="dataset_"))
+    else:
+        extract_dir = Path(extract_dir)
+        extract_dir.mkdir(parents=True, exist_ok=True)
+
+    # Extract zip contents
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        zf.extractall(extract_dir)
+
+    # Verify required files exist
+    if not (extract_dir / "dataset.json").exists():
+        raise ValueError(f"Zip file missing dataset.json: {zip_path}")
+
+    if not (extract_dir / "images").exists():
+        raise ValueError(f"Zip file missing images/ directory: {zip_path}")
+
+    return extract_dir
+
+
+def prepare_data_dir(data_dir: Path) -> Tuple[Path, bool]:
+    """
+    Prepare a data directory for training, extracting zip files if needed.
+
+    Handles three input formats:
+    1. Zip file: Extracts to temp directory
+    2. Directory with dataset.json: Uses as-is (exported format)
+    3. Directory with *.json: Uses as-is (annotation format)
+
+    Args:
+        data_dir: Path to data directory or zip file
+
+    Returns:
+        Tuple of (prepared_dir, is_temp) where is_temp indicates if
+        the directory should be cleaned up after training
+    """
+    data_dir = Path(data_dir)
+
+    # Check if it's a zip file
+    if data_dir.suffix == ".zip" or (data_dir.is_file() and zipfile.is_zipfile(data_dir)):
+        extracted_dir = extract_dataset_zip(data_dir)
+        return extracted_dir, True
+
+    # Otherwise, use the directory as-is
+    if not data_dir.exists():
+        raise FileNotFoundError(f"Data directory not found: {data_dir}")
+
+    return data_dir, False
+
+
+def cleanup_temp_dir(temp_dir: Path) -> None:
+    """
+    Clean up a temporary directory created during training.
+
+    Args:
+        temp_dir: Path to temporary directory to remove
+    """
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)

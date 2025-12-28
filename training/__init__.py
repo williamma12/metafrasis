@@ -2,22 +2,22 @@
 Training infrastructure for OCR models.
 
 This module provides tools for:
-- Converting annotation datasets to training-ready formats
 - Fine-tuning detectors (CRAFT, DB) and recognizers (CRNN, PP-OCR, trOCR)
 - Evaluating model performance
-- Exporting models to ONNX and HuggingFace Hub
+- Exporting models to ONNX
+
+Usage:
+    python -m training.finetune.detectors.craft training/configs/craft.yaml
+    python -m training.finetune.detectors.db training/configs/db.yaml
+    python -m training.finetune.recognizers.crnn training/configs/crnn.yaml
 """
 
-from training.data import (
-    DetectorDataset,
-    CRAFTDataset,
-    DBDataset,
-    RecognizerDataset,
-)
+from training.finetune.base import BaseTrainer
+from training.finetune.detectors.base import DetectorTrainer
+from training.finetune.recognizers.base import RecognizerTrainer
 
 __all__ = [
-    "DetectorDataset",
-    "CRAFTDataset",
-    "DBDataset",
-    "RecognizerDataset",
+    "BaseTrainer",
+    "DetectorTrainer",
+    "RecognizerTrainer",
 ]

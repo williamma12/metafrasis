@@ -8,26 +8,38 @@ DBNet uses ResNet backbone with FPN and produces:
 """
 
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
+import cv2
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset
+from PIL import Image
 
 from models import DBNet
+from services.annotation.models import Region
+from training.data.base import (
+    region_to_polygon,
+    get_region_mask,
+    compute_shrunk_polygon,
+    compute_distance_map,
+)
 from .base import DetectorTrainer, DetectorDataset
 
 
 class DBDataset(DetectorDataset):
     """Dataset for DB training with probability and threshold maps."""
 
-    def load_targets(self, sample_name: str) -> Dict[str, np.ndarray]:
-        """Load probability, threshold, and shrink mask."""
-        target_size = self.img_size // 4  # DBNet outputs at 1/4 resolution
-        from PIL import Image
+    def __init__(self, *args, shrink_ratio: float = 0.4, thresh_min: float = 0.3, thresh_max: float = 0.7, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.shrink_ratio = shrink_ratio
+        self.thresh_min = thresh_min
+        self.thresh_max = thresh_max
 
+    def load_targets(self, sample_name: str) -> Dict[str, np.ndarray]:
+        """Load probability, threshold, and shrink mask from exported format."""
         prob_map = np.load(
             self.targets_dir / "probability_map" / f"{sample_name}.npy"
         )
@@ -38,28 +50,78 @@ class DBDataset(DetectorDataset):
             self.targets_dir / "shrink_mask" / f"{sample_name}.npy"
         )
 
-        # Resize targets
-        prob_map = np.array(
-            Image.fromarray(prob_map).resize(
-                (target_size, target_size), Image.Resampling.BILINEAR
-            )
-        )
-        thresh_map = np.array(
-            Image.fromarray(thresh_map).resize(
-                (target_size, target_size), Image.Resampling.BILINEAR
-            )
-        )
-        shrink_mask = np.array(
-            Image.fromarray(shrink_mask.astype(np.uint8)).resize(
-                (target_size, target_size), Image.Resampling.NEAREST
-            )
-        )
-
+        # Return at full resolution (model outputs at same resolution as input)
         return {
             "prob_map": prob_map[np.newaxis, ...].astype(np.float32),
             "thresh_map": thresh_map[np.newaxis, ...].astype(np.float32),
             "shrink_mask": shrink_mask[np.newaxis, ...].astype(np.float32),
         }
+
+    def generate_targets(
+        self, image: Image.Image, regions: List[Region]
+    ) -> Dict[str, np.ndarray]:
+        """Generate DB-style probability, threshold, and shrink mask from annotation regions."""
+        width, height = image.size
+
+        # Generate probability map (shrunk polygons)
+        prob_map = np.zeros((height, width), dtype=np.float32)
+        for region in regions:
+            polygon = region_to_polygon(region)
+            shrunk = compute_shrunk_polygon(polygon, self.shrink_ratio)
+            shrunk_int = shrunk.astype(np.int32)
+            cv2.fillPoly(prob_map, [shrunk_int], 1.0)
+
+        # Generate threshold map (distance-based)
+        thresh_map = self._generate_threshold_map((width, height), regions)
+
+        # Generate shrink mask (original polygons)
+        shrink_mask = np.zeros((height, width), dtype=np.float32)
+        for region in regions:
+            polygon = region_to_polygon(region)
+            polygon_int = polygon.astype(np.int32)
+            cv2.fillPoly(shrink_mask, [polygon_int], 1.0)
+
+        # Return at full resolution (model outputs at same resolution as input)
+        return {
+            "prob_map": prob_map[np.newaxis, ...].astype(np.float32),
+            "thresh_map": thresh_map[np.newaxis, ...].astype(np.float32),
+            "shrink_mask": shrink_mask[np.newaxis, ...].astype(np.float32),
+        }
+
+    def _generate_threshold_map(
+        self, size: Tuple[int, int], regions: List[Region]
+    ) -> np.ndarray:
+        """Generate threshold map based on distance from text boundaries."""
+        width, height = size
+        thresh_map = np.zeros((height, width), dtype=np.float32)
+
+        for region in regions:
+            # Create mask for this region
+            mask = get_region_mask(region, size)
+
+            # Compute distance from boundary
+            dist_inside = cv2.distanceTransform(
+                (mask > 0.5).astype(np.uint8), cv2.DIST_L2, 5
+            )
+            dist_outside = cv2.distanceTransform(
+                (mask <= 0.5).astype(np.uint8), cv2.DIST_L2, 5
+            )
+
+            # Combine: positive inside, negative outside
+            dist = dist_inside - dist_outside
+
+            # Normalize to threshold range
+            if dist.max() > dist.min():
+                dist_norm = (dist - dist.min()) / (dist.max() - dist.min())
+                local_thresh = self.thresh_min + dist_norm * (self.thresh_max - self.thresh_min)
+            else:
+                local_thresh = np.full_like(dist, self.thresh_min)
+
+            # Only update where this region exists
+            region_mask = mask > 0.5
+            thresh_map[region_mask] = np.maximum(thresh_map[region_mask], local_thresh[region_mask])
+
+        return thresh_map
 
 
 class DBLoss(nn.Module):
@@ -209,3 +271,7 @@ class DBTrainer(DetectorTrainer):
             thresh_target,
             shrink_mask,
         )
+
+
+if __name__ == "__main__":
+    DBTrainer.main()

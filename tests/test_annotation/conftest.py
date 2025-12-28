@@ -96,7 +96,7 @@ def sample_annotated_image(sample_region, sample_region_no_text):
     """Create a sample AnnotatedImage with regions"""
     img = AnnotatedImage(
         id="img_abc123",
-        image_path="images/test_dataset/test.png",
+        image_path="images/test.png",  # New structure: relative to dataset dir
         width=200,
         height=100,
     )
@@ -110,7 +110,7 @@ def sample_annotated_image_empty():
     """Create an AnnotatedImage with no regions"""
     return AnnotatedImage(
         id="img_empty",
-        image_path="images/test_dataset/empty.png",
+        image_path="images/empty.png",  # New structure: relative to dataset dir
         width=300,
         height=200,
     )
@@ -168,13 +168,14 @@ def temp_exporter(temp_export_dir):
 @pytest.fixture
 def storage_with_images(temp_storage, sample_dataset, sample_image):
     """Create storage with actual image files"""
-    # Create images directory
-    images_dir = temp_storage.images_path / sample_dataset.name
+    # Create dataset images directory (new structure)
+    images_dir = temp_storage._dataset_images_dir(sample_dataset.name)
     images_dir.mkdir(parents=True, exist_ok=True)
 
     # Save test images
     for img in sample_dataset.images:
-        image_path = temp_storage.base_path / img.image_path
+        # New structure: images are relative to dataset dir
+        image_path = temp_storage.get_image_path_for_dataset(sample_dataset.name, img.image_path)
         image_path.parent.mkdir(parents=True, exist_ok=True)
         sample_image.save(image_path)
 

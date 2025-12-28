@@ -1,9 +1,15 @@
 # CRAFT Text Detector Training Configuration
-# Usage: python -m training.finetune.train_craft --config training/configs/craft.yaml
+# Usage: python -m training.finetune.detectors.craft training/configs/craft.yaml
 
-# Data
-data_dir: data/exports/detector/craft
-output_dir: training/outputs/craft
+# Data - accepts:
+#   - Annotation directory: data/annotations/<dataset_name>
+#   - Zip file: data/datasets/<dataset>.zip
+#   - Exported format: data/exports/<name> (with train/val subdirs)
+data_dir: data/annotations/test
+output_dir: data/training/craft
+
+# Dataset splitting
+split_ratio: 0.9
 
 # Model
 pretrained_backbone: true
@@ -21,6 +27,12 @@ neg_ratio: 3.0
 
 # Input
 img_size: 768
+
+# Evaluation
+iou_threshold: 0.5
+
+# Export (optional)
+export_onnx: false
 
 # Workers
 num_workers: 4

@@ -7,25 +7,32 @@ CRAFT uses a VGG16-BN backbone with U-Net style upsampling to produce:
 """
 
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
+import cv2
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset
+from PIL import Image
 
 from models import CRAFT
+from services.annotation.models import Region
+from training.data.base import region_to_polygon, compute_polygon_centroid, generate_gaussian_heatmap
 from .base import DetectorTrainer, DetectorDataset
 
 
 class CRAFTDataset(DetectorDataset):
     """Dataset for CRAFT training with region and affinity maps."""
 
-    def load_targets(self, sample_name: str) -> Dict[str, np.ndarray]:
-        """Load region and affinity target maps."""
-        target_size = self.img_size // 2  # CRAFT outputs at 1/2 resolution
+    def __init__(self, *args, gaussian_sigma: float = 10.0, affinity_max_distance: float = 50.0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.gaussian_sigma = gaussian_sigma
+        self.affinity_max_distance = affinity_max_distance
 
+    def load_targets(self, sample_name: str) -> Dict[str, np.ndarray]:
+        """Load region and affinity target maps from exported format."""
         region_map = np.load(
             self.targets_dir / "region_map" / f"{sample_name}.npy"
         )
@@ -33,24 +40,105 @@ class CRAFTDataset(DetectorDataset):
             self.targets_dir / "affinity_map" / f"{sample_name}.npy"
         )
 
-        # Resize targets to match model output size
-        from PIL import Image
-
-        region_map = np.array(
-            Image.fromarray(region_map).resize(
-                (target_size, target_size), Image.Resampling.BILINEAR
-            )
-        )
-        affinity_map = np.array(
-            Image.fromarray(affinity_map).resize(
-                (target_size, target_size), Image.Resampling.BILINEAR
-            )
-        )
-
+        # Return at full resolution (model outputs at same resolution as input)
         return {
             "region_map": region_map[np.newaxis, ...],  # Add channel dim
             "affinity_map": affinity_map[np.newaxis, ...],
         }
+
+    def generate_targets(
+        self, image: Image.Image, regions: List[Region]
+    ) -> Dict[str, np.ndarray]:
+        """Generate CRAFT-style region and affinity maps from annotation regions."""
+        width, height = image.size
+
+        # Generate at full resolution (model outputs at same resolution as input)
+        region_map = self._generate_region_map((width, height), regions)
+        affinity_map = self._generate_affinity_map((width, height), regions)
+
+        return {
+            "region_map": region_map[np.newaxis, ...].astype(np.float32),
+            "affinity_map": affinity_map[np.newaxis, ...].astype(np.float32),
+        }
+
+    def _generate_region_map(self, size: Tuple[int, int], regions: List[Region]) -> np.ndarray:
+        """Generate region score map with Gaussian heatmaps for each text region."""
+        width, height = size
+        region_map = np.zeros((height, width), dtype=np.float32)
+
+        for region in regions:
+            polygon = region_to_polygon(region)
+            mask = np.zeros((height, width), dtype=np.float32)
+            polygon_int = polygon.astype(np.int32)
+            cv2.fillPoly(mask, [polygon_int], 1.0)
+
+            # Adaptive sigma based on region size
+            x_min, y_min = polygon.min(axis=0)
+            x_max, y_max = polygon.max(axis=0)
+            sigma = max(2.0, min(x_max - x_min, y_max - y_min) / 4)
+
+            kernel_size = int(sigma * 6) | 1
+            if kernel_size > 1:
+                mask = cv2.GaussianBlur(mask, (kernel_size, kernel_size), sigma)
+
+            if mask.max() > 0:
+                mask = mask / mask.max()
+
+            region_map = np.maximum(region_map, mask)
+
+        return region_map
+
+    def _generate_affinity_map(self, size: Tuple[int, int], regions: List[Region]) -> np.ndarray:
+        """Generate affinity score map between adjacent regions."""
+        width, height = size
+        affinity_map = np.zeros((height, width), dtype=np.float32)
+
+        if len(regions) < 2:
+            return affinity_map
+
+        # Find adjacent pairs
+        pairs = self._find_adjacent_pairs(regions)
+
+        for region1, region2 in pairs:
+            poly1 = region_to_polygon(region1)
+            poly2 = region_to_polygon(region2)
+            cx1, cy1 = compute_polygon_centroid(poly1)
+            cx2, cy2 = compute_polygon_centroid(poly2)
+
+            mid_x = (cx1 + cx2) / 2
+            mid_y = (cy1 + cy2) / 2
+            distance = np.sqrt((cx2 - cx1) ** 2 + (cy2 - cy1) ** 2)
+            sigma = min(self.gaussian_sigma, distance / 4)
+
+            if sigma > 1:
+                heatmap = generate_gaussian_heatmap((mid_x, mid_y), size, sigma=sigma)
+                affinity_map = np.maximum(affinity_map, heatmap)
+
+        return affinity_map
+
+    def _find_adjacent_pairs(self, regions: List[Region]) -> List[Tuple[Region, Region]]:
+        """Find pairs of adjacent regions for affinity links."""
+        pairs = []
+        for i, region1 in enumerate(regions):
+            poly1 = region_to_polygon(region1)
+            cx1, cy1 = compute_polygon_centroid(poly1)
+            bbox1 = (poly1[:, 0].min(), poly1[:, 1].min(), poly1[:, 0].max(), poly1[:, 1].max())
+            h1 = bbox1[3] - bbox1[1]
+
+            for j, region2 in enumerate(regions[i + 1:], i + 1):
+                poly2 = region_to_polygon(region2)
+                cx2, cy2 = compute_polygon_centroid(poly2)
+                bbox2 = (poly2[:, 0].min(), poly2[:, 1].min(), poly2[:, 0].max(), poly2[:, 1].max())
+                h2 = bbox2[3] - bbox2[1]
+
+                h_distance = min(abs(bbox1[2] - bbox2[0]), abs(bbox2[2] - bbox1[0]))
+                v_distance = abs(cy1 - cy2)
+                avg_height = (h1 + h2) / 2
+
+                if h_distance < self.affinity_max_distance and v_distance < avg_height * 0.5:
+                    pairs.append((region1, region2))
+
+        return pairs
 
 
 class CRAFTLoss(nn.Module):
@@ -176,3 +264,7 @@ class CRAFTTrainer(DetectorTrainer):
         return self.criterion(
             region_pred, affinity_pred, region_target, affinity_target
         )
+
+
+if __name__ == "__main__":
+    CRAFTTrainer.main()

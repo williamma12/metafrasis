@@ -119,16 +119,17 @@ def render_image_upload(storage: AnnotationStorage, state: AnnotationState):
     )
 
     if uploaded_files and st.button("Add to Dataset"):
+        import tempfile
+
         for file in uploaded_files:
-            # Save image to dataset directory
             image = Image.open(file)
             width, height = image.size
 
-            # Save to storage
-            import tempfile
-            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.name).suffix) as tmp:
+            # Save to temp file, then copy via storage
+            with tempfile.NamedTemporaryFile(suffix=Path(file.name).suffix, delete=False) as tmp:
                 image.save(tmp.name)
                 relative_path = storage.copy_image(Path(tmp.name), state.dataset.name)
+                Path(tmp.name).unlink()  # Clean up temp file
 
             # Add to dataset
             annotated_image = AnnotatedImage(
@@ -144,14 +145,15 @@ def render_image_upload(storage: AnnotationStorage, state: AnnotationState):
         st.rerun()
 
 
-def render_image_navigation(state: AnnotationState):
+def render_image_navigation(storage: AnnotationStorage, state: AnnotationState):
     """Render image navigation controls"""
     if not state.dataset or not state.dataset.images:
         return
 
     num_images = len(state.dataset.images)
+    current_image = state.dataset.images[state.current_image_idx]
 
-    col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+    col1, col2, col3, col4, col5, col6 = st.columns([1, 1, 2, 1, 1, 1])
 
     with col1:
         if st.button("First", disabled=state.current_image_idx == 0, key="ann_first"):
@@ -180,6 +182,18 @@ def render_image_navigation(state: AnnotationState):
     with col5:
         if st.button("Last", disabled=state.current_image_idx >= num_images - 1, key="ann_last"):
             state.current_image_idx = num_images - 1
+            state.selected_region_id = None
+            st.rerun()
+
+    with col6:
+        if st.button("Delete", type="secondary", key="ann_delete_image"):
+            # Delete current image
+            storage.delete_image(state.dataset.name, current_image.id, delete_file=True)
+            # Reload dataset
+            state.dataset = storage.load(state.dataset.name)
+            # Adjust index if needed
+            if state.current_image_idx >= len(state.dataset.images):
+                state.current_image_idx = max(0, len(state.dataset.images) - 1)
             state.selected_region_id = None
             st.rerun()
 
@@ -289,8 +303,11 @@ def render_region_sidebar(storage: AnnotationStorage, state: AnnotationState, cu
 
 def render_annotation_canvas(storage: AnnotationStorage, state: AnnotationState, current_image: AnnotatedImage):
     """Render the annotation canvas"""
-    # Load image
-    image_path = storage.get_image_path(current_image.image_path)
+    # Load image - try new structure first, then fall back to old
+    image_path = storage.get_image_path_for_dataset(state.dataset.name, current_image.image_path)
+    if not image_path.exists():
+        # Fall back to old structure
+        image_path = storage.get_image_path(current_image.image_path)
     if not image_path.exists():
         st.error(f"Image not found: {current_image.image_path}")
         return
@@ -344,8 +361,10 @@ def run_auto_detection(storage: AnnotationStorage, state: AnnotationState, curre
     try:
         from services.ocr.factory import OCREngineFactory
 
-        # Load image
-        image_path = storage.get_image_path(current_image.image_path)
+        # Load image - try new structure first, then fall back to old
+        image_path = storage.get_image_path_for_dataset(state.dataset.name, current_image.image_path)
+        if not image_path.exists():
+            image_path = storage.get_image_path(current_image.image_path)
         image = Image.open(image_path)
 
         # Use CRAFT detector
@@ -410,7 +429,7 @@ def render_annotation_page():
     st.divider()
 
     # Navigation
-    render_image_navigation(state)
+    render_image_navigation(storage, state)
 
     st.divider()
 

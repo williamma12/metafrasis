@@ -65,3 +65,9 @@ ignore = []
 testpaths = ["tests"]
 python_files = "test_*.py"
 python_functions = "test_*"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "requires_craft: marks tests requiring CRAFT model weights",
+    "requires_crnn: marks tests requiring CRNN model weights",
+    "requires_tesseract: marks tests requiring Tesseract installation",
+]

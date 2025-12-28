@@ -206,19 +206,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Metafrasis - Downloaded models (models are hosted externally)
-models/*
-!models/__init__.py
-!models/registry.json
-!models/.gitkeep
-!models/download_models.py
-!models/layers.py
-!models/backbones/
-!models/necks/
-!models/heads/
-!models/composites/
-
-# Metafrasis - Training data and outputs
+# Metafrasis - Data directory (includes training data, outputs, and downloaded model weights)
 data/
 
 # Node.js / Frontend

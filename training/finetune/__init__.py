@@ -8,7 +8,7 @@ Provides base classes and concrete trainers for:
 Example usage:
     from training.finetune import CRNNTrainer
 
-    config = {"data_dir": "data/train", "output_dir": "output/crnn"}
+    config = {"data_dir": "data/annotations/my_dataset", "output_dir": "data/training/crnn"}
     trainer = CRNNTrainer(config)
     results = trainer.train()
 """

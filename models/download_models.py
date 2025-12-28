@@ -25,6 +25,7 @@ import urllib.error
 # Get project root
 PROJECT_ROOT = Path(__file__).parent.parent
 MODELS_DIR = PROJECT_ROOT / "models"
+MODEL_WEIGHTS_DIR = PROJECT_ROOT / "data" / "model_weights"
 REGISTRY_FILE = MODELS_DIR / "registry.json"
 
 
@@ -167,8 +168,9 @@ def download_model(
         # Extract filename from URL
         filename = model_url.split("/")[-1]
 
-    # Create model-specific subdirectory
-    model_dir = MODELS_DIR / model_type
+    # Create model-specific subdirectory in weights directory
+    MODEL_WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
+    model_dir = MODEL_WEIGHTS_DIR / model_type
     model_dir.mkdir(exist_ok=True)
 
     output_path = model_dir / filename

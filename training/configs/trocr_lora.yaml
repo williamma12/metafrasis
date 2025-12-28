@@ -1,9 +1,12 @@
 # trOCR with LoRA Fine-tuning Configuration
-# Usage: python -m training.finetune.train_trocr --config training/configs/trocr_lora.yaml
+# Usage: python -m training.finetune.recognizers.trocr training/configs/trocr_lora.yaml
 
 # Data
 data_dir: data/exports/recognizer
-output_dir: training/outputs/trocr_lora
+output_dir: data/training/trocr_lora
+
+# Dataset splitting
+split_ratio: 0.9
 
 # Base model
 model_name: microsoft/trocr-base-handwritten

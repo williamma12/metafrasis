@@ -15,6 +15,9 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from PIL import Image
 
+from services.annotation.models import AnnotationDataset, Region
+from services.annotation.storage import AnnotationStorage
+from training.data.base import crop_region, resize_keeping_aspect_ratio
 from ..base import BaseTrainer
 
 
@@ -22,9 +25,13 @@ class RecognizerDataset(Dataset):
     """
     Dataset for text recognition training.
 
-    Loads images and labels from the standard recognizer format:
-    - images/ directory containing cropped text line images
-    - labels.txt with filename<tab>text format
+    Supports two data formats:
+    1. Annotation format: Load directly from AnnotationDataset JSON files
+       - Crops text regions from images using region coordinates
+       - Uses region.text as the label
+    2. Exported format: Load pre-cropped images and labels
+       - images/ directory containing cropped text line images
+       - labels.txt with filename<tab>text format
     """
 
     def __init__(
@@ -33,20 +40,35 @@ class RecognizerDataset(Dataset):
         img_height: int = 32,
         img_width: int = 128,
         char_to_idx: Optional[Dict[str, int]] = None,
+        annotation_dataset: Optional[AnnotationDataset] = None,
+        storage: Optional[AnnotationStorage] = None,
     ):
         self.data_dir = Path(data_dir)
         self.img_height = img_height
         self.img_width = img_width
 
-        # Load labels
-        labels_file = self.data_dir / "labels.txt"
-        self.samples = []
-        with open(labels_file, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if "\t" in line:
-                    filename, text = line.split("\t", 1)
-                    self.samples.append((filename, text))
+        # Annotation-based loading
+        self.annotation_dataset = annotation_dataset
+        self.storage = storage
+        self.use_annotations = annotation_dataset is not None
+
+        if self.use_annotations:
+            # Build samples from annotations (image_idx, region_idx, text)
+            self.samples = []
+            for img_idx, annotated_image in enumerate(annotation_dataset.images):
+                for reg_idx, region in enumerate(annotated_image.regions):
+                    if region.text:  # Only include regions with text labels
+                        self.samples.append((img_idx, reg_idx, region.text))
+        else:
+            # Load from exported format
+            labels_file = self.data_dir / "labels.txt"
+            self.samples = []
+            with open(labels_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if "\t" in line:
+                        filename, text = line.split("\t", 1)
+                        self.samples.append((filename, text))
 
         # Build or use provided character mapping
         if char_to_idx is None:
@@ -59,7 +81,9 @@ class RecognizerDataset(Dataset):
     def _build_vocab(self) -> Dict[str, int]:
         """Build character vocabulary from labels."""
         chars = set()
-        for _, text in self.samples:
+        for sample in self.samples:
+            # Handle both annotation format (img_idx, reg_idx, text) and exported (filename, text)
+            text = sample[-1]  # Text is always the last element
             chars.update(text)
 
         # Sort for deterministic ordering, reserve 0 for CTC blank
@@ -87,6 +111,45 @@ class RecognizerDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, int]:
+        if self.use_annotations:
+            return self._getitem_annotation(idx)
+        else:
+            return self._getitem_exported(idx)
+
+    def _getitem_annotation(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, int]:
+        """Load item from annotation dataset by cropping region from full image."""
+        img_idx, reg_idx, text = self.samples[idx]
+        annotated_image = self.annotation_dataset.images[img_idx]
+        region = annotated_image.regions[reg_idx]
+
+        # Load full image
+        image_path = self.storage.get_image_path(annotated_image.image_path)
+        full_image = Image.open(image_path).convert("RGB")
+
+        # Crop region from image
+        cropped = crop_region(full_image, region)
+
+        # Convert to grayscale
+        cropped = cropped.convert("L")
+
+        # Resize keeping aspect ratio, then pad/crop to target size
+        cropped = resize_keeping_aspect_ratio(
+            cropped, self.img_height, self.img_width
+        )
+
+        # Convert to tensor and normalize
+        image = np.array(cropped, dtype=np.float32) / 255.0
+        image = (image - 0.5) / 0.5  # Normalize to [-1, 1]
+        image = torch.tensor(image).unsqueeze(0)  # Add channel dim
+
+        # Encode text
+        target = torch.tensor(self.encode_text(text), dtype=torch.long)
+        target_length = len(target)
+
+        return image, target, target_length
+
+    def _getitem_exported(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, int]:
+        """Load item from exported format."""
         filename, text = self.samples[idx]
 
         # Load and preprocess image
@@ -143,52 +206,58 @@ class RecognizerTrainer(BaseTrainer):
         self.char_to_idx: Optional[Dict[str, int]] = None
         self.idx_to_char: Optional[Dict[int, str]] = None
 
-    def create_dataloaders(self) -> Tuple[DataLoader, DataLoader]:
-        """Create train and validation dataloaders."""
-        data_dir = Path(self.config["data_dir"])
-        img_height = self.config.get("img_height", 32)
-        img_width = self.config.get("img_width", 128)
-        batch_size = self.config.get("batch_size", 32)
-        num_workers = self.config.get("num_workers", 4)
+    @property
+    def dataset_class(self) -> type:
+        """Return the dataset class to use."""
+        return RecognizerDataset
 
-        train_dataset = RecognizerDataset(
-            data_dir / "train",
-            img_height=img_height,
-            img_width=img_width,
-        )
+    def get_dataset_kwargs(self) -> Dict[str, Any]:
+        """Return dataset-specific kwargs for recognizers."""
+        return {
+            "img_height": self.config.get("img_height", 32),
+            "img_width": self.config.get("img_width", 128),
+        }
 
-        # Store vocabulary
+    def get_collate_fn(self):
+        """Return collate function for variable-length targets."""
+        return collate_fn
+
+    def create_val_dataset(
+        self,
+        data_dir: Path,
+        val_data: Optional[AnnotationDataset],
+        storage: Any,
+        train_dataset: Dataset,
+        dataset_kwargs: Dict[str, Any],
+    ) -> Dataset:
+        """
+        Create validation dataset with shared vocabulary from training dataset.
+        """
+        # Add vocabulary from train dataset
+        kwargs = {**dataset_kwargs, "char_to_idx": train_dataset.char_to_idx}
+
+        if val_data is not None:
+            return self.dataset_class(
+                data_dir,
+                annotation_dataset=val_data,
+                storage=storage,
+                **kwargs,
+            )
+        else:
+            return self.dataset_class(
+                data_dir / "val",
+                **kwargs,
+            )
+
+    def post_create_dataloaders(
+        self,
+        train_dataset: Dataset,
+        val_dataset: Dataset,
+    ) -> None:
+        """Store vocabulary mappings after dataset creation."""
         self.char_to_idx = train_dataset.char_to_idx
         self.idx_to_char = train_dataset.idx_to_char
-
-        val_dataset = RecognizerDataset(
-            data_dir / "val",
-            img_height=img_height,
-            img_width=img_width,
-            char_to_idx=self.char_to_idx,
-        )
-
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=num_workers,
-            collate_fn=collate_fn,
-        )
-
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=num_workers,
-            collate_fn=collate_fn,
-        )
-
-        self.logger.info(f"Train samples: {len(train_dataset)}")
-        self.logger.info(f"Val samples: {len(val_dataset)}")
         self.logger.info(f"Vocabulary size: {len(self.char_to_idx)}")
-
-        return train_loader, val_loader
 
     @property
     def num_classes(self) -> int:
