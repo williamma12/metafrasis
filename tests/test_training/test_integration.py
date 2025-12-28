@@ -109,8 +109,8 @@ class TestDetectorTrainingPipeline:
         assert "epochs_trained" in results
         assert results["epochs_trained"] == training_config["epochs"]
 
-        # Check output files exist
-        output_dir = Path(training_config["output_dir"])
+        # Check output files exist (output_dir includes timestamp subdirectory)
+        output_dir = Path(results["output_dir"])
         assert (output_dir / "best_model.pt").exists()
         assert (output_dir / "final_model.pt").exists()
         assert (output_dir / "metrics.json").exists()

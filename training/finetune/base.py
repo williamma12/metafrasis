@@ -6,6 +6,7 @@ for model-specific implementations.
 """
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import logging
@@ -77,7 +78,11 @@ class BaseTrainer(ABC):
         """
         self.config = config
         self.device = config.get("device") or get_device()
-        self.output_dir = Path(config["output_dir"])
+
+        # Create timestamped output subdirectory for this run
+        base_output_dir = Path(config["output_dir"])
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        self.output_dir = base_output_dir / timestamp
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.logger = setup_logging(self.output_dir, self.name)
         self.metrics = MetricTracker()
