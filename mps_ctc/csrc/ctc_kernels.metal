@@ -496,8 +496,6 @@ kernel void ctc_gradient(
 
     device const int* targets_b = targets + b * S;
 
-    // TODO: Implement gradient computation
-    //
     // Step 1: Get total log probability (= -loss[b])
     //   float total_log_prob = log_sum_exp(
     //     alpha[(T_b-1) * (B * L) + b * L + (L_b-1)],  // final blank
@@ -521,7 +519,23 @@ kernel void ctc_gradient(
     // Step 4: Scale by grad_output and negate (since loss = -log_prob)
     //   grad[t * (B * C) + b * C + c] = -grad_val * grad_output[b];
 
-    grad[t * (B * C) + b * C + c] = 0.0f; // PLACEHOLDER
+    // Get total log prob
+    float final_blank = alpha[(T_b-1) * (B * L) + b * L + (L_b-1)];
+    float final_char = (L_b > 1) ? alpha[(T_b-1) * (B * L) + b * L + (L_b-2)] : NEG_INF;
+    float total_log_prob = log_sum_exp(final_blank, final_char);
+
+    float log_grad = NEG_INF;
+    for (int s = 0; s < L_b; s++) {
+        if (get_label(s, targets_b, blank) == c) {
+            float alpha_beta = alpha[t * (B * L) + b * L + s] + beta[t * (B * L) + b * L + s];
+            log_grad = log_sum_exp(log_grad, alpha_beta);
+        }
+    }
+
+    float prob = exp(log_probs[t * (B * C) + b * C + c]);
+    float grad_val = exp(log_grad - total_log_prob) - prob;
+
+    grad[t * (B * C) + b * C + c] = -grad_val * grad_output[b];
 }
 
 

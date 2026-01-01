@@ -218,6 +218,12 @@ class CTCLossFunctionNative(Function):
 
     @staticmethod
     def forward(ctx, log_probs, targets, input_lengths, target_lengths, blank):
+        # Ensure correct dtypes for Metal kernels
+        log_probs = log_probs.contiguous().float()
+        targets = targets.contiguous().int()
+        input_lengths = input_lengths.contiguous().int()
+        target_lengths = target_lengths.contiguous().int()
+
         loss, alpha = _C.ctc_loss_forward(
             log_probs, targets, input_lengths, target_lengths, blank
         )
@@ -228,6 +234,7 @@ class CTCLossFunctionNative(Function):
     @staticmethod
     def backward(ctx, grad_output):
         log_probs, alpha, targets, input_lengths, target_lengths = ctx.saved_tensors
+        grad_output = grad_output.contiguous().float()
         grad_log_probs = _C.ctc_loss_backward(
             grad_output, log_probs, alpha, targets,
             input_lengths, target_lengths, ctx.blank
