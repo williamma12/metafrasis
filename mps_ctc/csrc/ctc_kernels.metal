@@ -81,16 +81,11 @@ constant float NEG_INF = -INFINITY;
  *   log_sum_exp(log(0.3), log(0.5)) = log(0.3 + 0.5) = log(0.8)
  */
 inline float log_sum_exp(float a, float b) {
-    // TODO: Implement numerically stable log-sum-exp
-    //
-    // Algorithm:
-    // 1. Handle special case where a = -inf (return b)
-    // 2. Handle special case where b = -inf (return a)
-    // 3. Let max_val = max(a, b)
-    // 4. Return max_val + log1p(exp(-abs(a - b)))
-    //    (log1p computes log(1 + x) accurately for small x)
-
-    return 0.0f; // PLACEHOLDER
+    if (a == NEG_INF) { return b; }
+    if (b == NEG_INF) { return a; }
+    float max_val = fmax(a, b);
+    // log1p(x) = log(1 + x), used for numerical stability
+    return max_val + log(1.0f + exp(-fabs(a - b)));
 }
 
 /**
@@ -104,8 +99,7 @@ inline float log_sum_exp(float a, float b) {
  * @return log(exp(a) + exp(b) + exp(c))
  */
 inline float log_sum_exp3(float a, float b, float c) {
-    // TODO: Implement using two calls to log_sum_exp
-    return 0.0f; // PLACEHOLDER
+    return log_sum_exp(log_sum_exp(a, b), c);
 }
 
 /**
@@ -121,10 +115,8 @@ inline float log_sum_exp3(float a, float b, float c) {
  * @return Label index at position s
  */
 inline int get_label(int s, device const int* targets, int blank) {
-    // TODO: Implement
-    // If s is even: return blank
-    // If s is odd: return targets[s / 2]
-    return 0; // PLACEHOLDER
+    if (s % 2 == 0) { return blank; }
+    return targets[s / 2];
 }
 
 
@@ -226,30 +218,72 @@ kernel void ctc_forward(
     // Pointer to this batch's targets
     device const int* targets_b = targets + b * S;
 
-    // TODO: Implement forward pass
-    //
+    // Helper for indexing:
+    //   alpha index = t * (B * L) + b * L + s
+    //   log_probs index = t * (B * C) + b * C + c
+
     // Step 1: Initialize alpha at t=0
-    //   - Set all alpha[0, b, :] to NEG_INF first
-    //   - alpha[0, b, 0] = log_probs[0, b, blank]
-    //   - if L_b > 1: alpha[0, b, 1] = log_probs[0, b, targets_b[0]]
-    //
+    for (int s = 0; s < L_b; s++) {
+        alpha[0 * (B * L) + b * L + s] = NEG_INF;
+    }
+    
+    // Can start at s=0
+    alpha[0 * (B * L) + b * L + 0] = log_probs[0 * (B * C) + b * C + blank];
+
+    // Can start first character at s=1 if exists.
+    if (L_b > 1) {
+        int first_char = targets_b[0];
+        alpha[0 * (B * L) + b * L + 1] = log_probs[0 * (B * C) + b * C + first_char];
+    }
+
     // Step 2: Forward recursion for t = 1 to T_b - 1
     //   For each state s = 0 to L_b - 1:
     //     - Get current label using get_label(s, targets_b, blank)
     //     - Compute transitions (same state, previous state, skip state)
     //     - Add emission probability: log_probs[t, b, label]
     //     - Store in alpha[t, b, s]
-    //
+    for (int t = 1; t < T_b; t++) {
+        for (int s = 0; s < L_b; s++) {
+            int label = get_label(s, targets_b, blank);
+
+            // Start with -inf (log of 0)
+            float score = NEG_INF;
+
+            // Transition 1: Stay in same state (s -> s)
+            score = alpha[(t-1) * (B * L) + b * L + s];
+
+            // Transition 2: Come from previous state (s-1 -> s)
+            if (s > 0) {
+                score = log_sum_exp(score, alpha[(t-1) * (B * L) + b * L + (s-1)]);
+            }
+
+            // Transition 3: Skip state (s-2 -> s)
+            // Only allowed if:
+            //   - s > 1 (have a state to skip from)
+            //   - current label is not blank
+            //   - current label != label at s-2 (can't skip between same chars)
+            if (s > 1 && label != blank && label != get_label(s - 2, targets_b, blank)) {
+                score = log_sum_exp(score, alpha[(t - 1) * (B * L) + b * L + (s-2)]);
+            }
+
+            // Add emission probability
+            score += log_probs[t * (B * C) + b * C + label];
+
+            // Store in alpha[t, b, s]
+            alpha[t * (B * L) + b * L + s] = score;
+        }
+    }
+    
     // Step 3: Compute loss
     //   - Final alpha at last blank: alpha[T_b-1, b, L_b-1]
     //   - Final alpha at last char:  alpha[T_b-1, b, L_b-2]
     //   - loss[b] = -log_sum_exp(final_blank, final_char)
-    //
-    // Helper for indexing:
-    //   alpha index = t * (B * L) + b * L + s
-    //   log_probs index = t * (B * C) + b * C + c
+    float final_blank = alpha[(T_b-1) * (B * L) + b * L + (L_b-1)];
+    float final_char = (L_b > 1) ? alpha[(T_b-1) * (B * L) + b * L + (L_b-2)] : NEG_INF;
 
-    losses[b] = 0.0f; // PLACEHOLDER
+    float log_likelihood = log_sum_exp(final_blank, final_char);
+
+    losses[b] = -log_likelihood;
 }
 
 
@@ -338,6 +372,50 @@ kernel void ctc_backward(
     // The backward pass mirrors the forward pass structure but:
     //   - Iterates time backwards (T-2 down to 0)
     //   - Uses transitions to s, s+1, s+2 instead of from s, s-1, s-2
+
+    // Step 1: Initialize betas
+    for (int s = 0; s < L_b; s++) {
+        beta[(T_b-1) * (B * L) + b * L + s] = NEG_INF;
+    }
+
+    beta[(T_b-1) * (B * L) + b * L + (L_b-1)] = 0.0f;
+
+    if (L_b > 1) {
+        beta[(T_b-1) * (B * L) + b * L + (L_b-2)] = 0.0f;
+    }
+
+    // Step 2: Backward recursion
+    for (int t = T_b - 2; t >= 0; t--) {
+        for (int s = 0; s < L_b; s++) {
+            int label = get_label(s, targets_b, blank);
+
+            float score = NEG_INF;
+
+            // Transition 1: stay in same state (s -> s at t+1)
+            // Need log_probs at t+1 for label at state s
+            score = beta[(t+1) * (B * L) + b * L + s] + log_probs[(t+1) * (B * C) + b * C + label];
+
+            // Transition 2: advance to next state (s -> s+1 at t+1)
+            if (s + 1 < L_b) {
+                int label_s1 = get_label(s + 1, targets_b, blank);
+                score = log_sum_exp(score, beta[(t+1) * (B * L) + b * L + (s+1)] + log_probs[(t+1) * (B * C) + b * C + label_s1]);
+            }
+
+            // Transition 3: skip state (s -> s+2 at t+1)
+            // Only allowed if:
+            //   - s+2 < L_b (have a state to skip to)
+            //   - label at s+2 is not blank
+            //   - label at s+2 != label at s (can't skip between same chars)
+            if (s + 2 < L_b) {
+                int label_s2 = get_label(s + 2, targets_b, blank);
+                if (label_s2 != blank && label_s2 != label) {
+                    score = log_sum_exp(score, beta[(t+1) * (B * L) + b * L + (s+2)] + log_probs[(t+1) * (B * C) + b * C + label_s2]);
+                }
+            }
+
+            beta[t * (B * L) + b * L + s] = score;
+        }
+    }
 }
 
 

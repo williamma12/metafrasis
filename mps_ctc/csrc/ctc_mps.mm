@@ -68,7 +68,17 @@
 // =============================================================================
 
 // Get the source directory of this file.
+// Uses absolute path from Dl_info to handle different working directories.
+#include <dlfcn.h>
 NSString *getSourceDir() {
+  Dl_info info;
+  if (dladdr((void *)getSourceDir, &info)) {
+    NSString *modulePath = [NSString stringWithUTF8String:info.dli_fname];
+    // Module is at mps_ctc/_C.*.so, source is at mps_ctc/csrc/
+    return [[modulePath stringByDeletingLastPathComponent]
+        stringByAppendingPathComponent:@"csrc"];
+  }
+  // Fallback to compile-time path
   NSString *thisFile = @__FILE__;
   return [thisFile stringByDeletingLastPathComponent];
 }
@@ -161,27 +171,30 @@ struct MetalContext {
 
         BOOL isStale = [metallibDate compare:sourceDate] == NSOrderedAscending;
         if (!isStale) {
+          error = nil;  // Reset error
           library = [device newLibraryWithFile:metallibPath error:&error];
-          TORCH_CHECK(error != nil,
-                      "Error when loading compiled ctc metal kernel",
-                      [[error localizedDescription] UTF8String]);
+          TORCH_CHECK(library != nil,
+                      "Error when loading compiled ctc metal kernel: ",
+                      error ? [[error localizedDescription] UTF8String] : "unknown error");
         }
       }
 
       if (library == nil) {
+        error = nil;  // Reset error
         NSString *sourceString =
             [NSString stringWithContentsOfFile:sourcePath
                                       encoding:NSUTF8StringEncoding
                                          error:&error];
-        TORCH_CHECK(error != nil,
-                    "Error when reading in source file of ctc metal kernel",
-                    [[error localizedDescription] UTF8String]);
+        TORCH_CHECK(sourceString != nil,
+                    "Error when reading in source file of ctc metal kernel: ",
+                    error ? [[error localizedDescription] UTF8String] : "unknown error");
+        error = nil;  // Reset error
         library = [device newLibraryWithSource:sourceString
                                        options:nil
                                          error:&error];
-        TORCH_CHECK(error != nil,
-                    "Error when loading in source file of ctc metal kernel",
-                    [[error localizedDescription] UTF8String]);
+        TORCH_CHECK(library != nil,
+                    "Error when compiling ctc metal kernel: ",
+                    error ? [[error localizedDescription] UTF8String] : "unknown error");
 
         // Save compiled in background
         dispatch_async(
@@ -210,18 +223,33 @@ struct MetalContext {
 
       // Step 3: Create pipeline states
       id<MTLFunction> forward_fn = [library newFunctionWithName:@"ctc_forward"];
+      TORCH_CHECK(forward_fn != nil, "Failed to find ctc_forward function in Metal library");
+      error = nil;
       forward_kernel = [device newComputePipelineStateWithFunction:forward_fn
                                                              error:&error];
+      TORCH_CHECK(forward_kernel != nil,
+                  "Failed to create forward kernel pipeline: ",
+                  error ? [[error localizedDescription] UTF8String] : "unknown error");
 
       id<MTLFunction> backward_fn =
           [library newFunctionWithName:@"ctc_backward"];
+      TORCH_CHECK(backward_fn != nil, "Failed to find ctc_backward function in Metal library");
+      error = nil;
       backward_kernel = [device newComputePipelineStateWithFunction:backward_fn
                                                               error:&error];
+      TORCH_CHECK(backward_kernel != nil,
+                  "Failed to create backward kernel pipeline: ",
+                  error ? [[error localizedDescription] UTF8String] : "unknown error");
 
       id<MTLFunction> gradient_fn =
           [library newFunctionWithName:@"ctc_gradient"];
+      TORCH_CHECK(gradient_fn != nil, "Failed to find ctc_gradient function in Metal library");
+      error = nil;
       gradient_kernel = [device newComputePipelineStateWithFunction:gradient_fn
                                                               error:&error];
+      TORCH_CHECK(gradient_kernel != nil,
+                  "Failed to create gradient kernel pipeline: ",
+                  error ? [[error localizedDescription] UTF8String] : "unknown error");
 
       initialized = true;
     }
@@ -251,7 +279,7 @@ static MetalContext g_context;
 inline id<MTLBuffer> getMTLBuffer(const torch::Tensor &tensor) {
   // The tensor's storage data pointer is actually a void* that can be
   // bridged to an MTLBuffer
-  return __bridge id<MTLBuffer>(tensor.storage().data());
+  return (__bridge id<MTLBuffer>)(tensor.storage().data());
 }
 
 /**
@@ -517,9 +545,10 @@ torch::Tensor ctc_loss_backward(const torch::Tensor &grad_output,
     [encoder setBytes:&S length:sizeof(int) atIndex:8];
     [encoder setBytes:&blank length:sizeof(int) atIndex:9];
 
-    MTLSize backwardGridSize = MTLSizeMake(T, B, C);
-    MTLSize backwardBlockSize = MTLSizeMake(8, 8, 4); // TODO: Tune for different architectures.
-    dispatchKernel(encoder, g_context.gradient_kernel, backwardGridSize, backwardBlockSize);
+    // One thread per batch element
+    MTLSize backwardGridSize = MTLSizeMake(B, 1, 1);
+    MTLSize backwardBlockSize = MTLSizeMake(fmin(B, 256), 1, 1);
+    dispatchKernel(encoder, g_context.backward_kernel, backwardGridSize, backwardBlockSize);
     [encoder endEncoding];
     
     // Part 2: Compute gradients
