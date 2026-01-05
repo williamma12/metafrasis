@@ -58,6 +58,7 @@
  * Use synchronize() or proper command buffer dependencies.
  */
 
+#include "torch/mps.h"
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 
@@ -116,6 +117,7 @@ struct MetalContext {
   id<MTLComputePipelineState> forward_kernel = nil;
   id<MTLComputePipelineState> backward_kernel = nil;
   id<MTLComputePipelineState> gradient_kernel = nil;
+  id<MTLComputePipelineState> combined_kernel = nil;
   bool initialized = false;
 
   /**
@@ -249,6 +251,17 @@ struct MetalContext {
                                                               error:&error];
       TORCH_CHECK(gradient_kernel != nil,
                   "Failed to create gradient kernel pipeline: ",
+                  error ? [[error localizedDescription] UTF8String] : "unknown error");
+
+
+      id<MTLFunction> combined_fn =
+          [library newFunctionWithName:@"ctc_forward_backward_combined"];
+      TORCH_CHECK(gradient_fn != nil, "Failed to find ctc_forward_backward_combined function in Metal library");
+      error = nil;
+      combined_kernel = [device newComputePipelineStateWithFunction:combined_fn
+                                                              error:&error];
+      TORCH_CHECK(combined_kernel != nil,
+                  "Failed to create forward and backward combined kernel pipeline: ",
                   error ? [[error localizedDescription] UTF8String] : "unknown error");
 
       initialized = true;
@@ -526,8 +539,6 @@ torch::Tensor ctc_loss_backward(const torch::Tensor &grad_output,
   // ==========================================================================
 
   @autoreleasepool {
-    // TODO: Implement backward pass
-    //
     // Part 1: Compute backward variables (beta)
     // -----------------------------------------
     id<MTLCommandBuffer> commandBuffer = torch::mps::get_command_buffer();
@@ -582,6 +593,56 @@ torch::Tensor ctc_loss_backward(const torch::Tensor &grad_output,
   return grad;
 }
 
+std::tuple<torch::Tensor, torch::Tensor>
+ctc_loss_combined(const torch::Tensor &log_probs,
+                  const torch::Tensor &targets,
+                  const torch::Tensor &input_lengths,
+                  const torch::Tensor &target_lengths,
+                  const torch::Tensor &grad_output,
+                  int blank) {
+  g_context.initialize();
+
+  // Dimensions
+  int T = log_probs.size(0);
+  int B = log_probs.size(1);
+  int C = log_probs.size(2);
+  int S = targets.size(1);
+
+  // Allocate outputs
+  auto loss = torch::empty({B}, log_probs.options());
+  auto grad = torch::zeros({T, B, C}, log_probs.options());
+
+  @autoreleasepool {
+    id<MTLCommandBuffer> commandBuffer = torch::mps::get_command_buffer();
+    id<MTLComputeCommandEncoder> encoder = [commandBuffer computeCommandEncoder];
+
+    [encoder setComputePipelineState:g_context.combined_kernel];
+    [encoder setBuffer:getMTLBuffer(log_probs) offset:getMTLBufferOffset(log_probs) atIndex:0];
+    [encoder setBuffer:getMTLBuffer(targets) offset:getMTLBufferOffset(targets) atIndex:1];
+    [encoder setBuffer:getMTLBuffer(input_lengths) offset:getMTLBufferOffset(input_lengths) atIndex:2];
+    [encoder setBuffer:getMTLBuffer(target_lengths) offset:getMTLBufferOffset(target_lengths) atIndex:3];
+    [encoder setBuffer:getMTLBuffer(grad_output) offset:getMTLBufferOffset(grad_output) atIndex:4];
+    [encoder setBuffer:getMTLBuffer(grad) offset:getMTLBufferOffset(grad) atIndex:5];
+    [encoder setBuffer:getMTLBuffer(loss) offset:getMTLBufferOffset(loss) atIndex:6];
+    [encoder setBytes:&T length:sizeof(int) atIndex:7];
+    [encoder setBytes:&B length:sizeof(int) atIndex:8];
+    [encoder setBytes:&C length:sizeof(int) atIndex:9];
+    [encoder setBytes:&S length:sizeof(int) atIndex:10];
+    [encoder setBytes:&blank length:sizeof(int) atIndex:11];
+
+    MTLSize gridSize = MTLSizeMake(B, 1, 1);
+    MTLSize blockSize = MTLSizeMake(256, 1, 1);
+    [encoder dispatchThreadgroups:gridSize threadsPerThreadgroup:blockSize];
+
+    [encoder endEncoding];
+    torch::mps::commit();
+    torch::mps::synchronize();
+  }
+
+    return {loss, grad};
+}
+
+
 // =============================================================================
 // PYTHON BINDINGS
 // =============================================================================
@@ -609,4 +670,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
         "CTC loss backward pass on MPS", py::arg("grad_output"),
         py::arg("log_probs"), py::arg("alpha"), py::arg("targets"),
         py::arg("input_lengths"), py::arg("target_lengths"), py::arg("blank"));
+  m.def("ctc_loss_combined", &ctc_loss_combined,
+      "CTC loss combined forward-backward on MPS",
+      py::arg("log_probs"), py::arg("targets"), py::arg("input_lengths"),
+      py::arg("target_lengths"), py::arg("grad_output"), py::arg("blank"));
+
 }

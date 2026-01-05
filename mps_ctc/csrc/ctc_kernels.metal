@@ -540,18 +540,248 @@ kernel void ctc_gradient(
 
 
 // =============================================================================
-// COMBINED FORWARD-BACKWARD KERNEL (OPTIONAL OPTIMIZATION)
+// COMBINED FORWARD-BACKWARD KERNEL WITH STATE-LEVEL PARALLELISM
 // =============================================================================
 
+// Maximum sizes for threadgroup memory allocation
+constant int MAX_L = 257;    // Max expanded sequence length = 2*128 + 1
+constant int MAX_C = 256;    // Max vocabulary size
+
 /**
- * Combined Forward-Backward Kernel
- *
- * For better performance, you can combine forward and backward passes
- * into a single kernel to reduce memory bandwidth.
- *
- * This requires storing alpha in shared memory (threadgroup memory)
- * and computing beta on-the-fly while computing gradients.
- *
- * This is an advanced optimization - implement basic kernels first!
+ * SIMD log-sum-exp reduction within a SIMD group (32 threads).
+ * Result is in lane 0.
  */
-// kernel void ctc_forward_backward_combined(...) { }
+inline float simd_log_sum_exp_reduce(float val, uint simd_size) {
+    for (uint offset = simd_size / 2; offset > 0; offset /= 2) {
+        val = log_sum_exp(val, simd_shuffle_down(val, offset));
+    }
+    return val;
+}
+
+/**
+ * Recompute alpha from t=0 to target_t (inclusive).
+ * After this, alpha_curr contains alpha[target_t].
+ *
+ * This is called once per backward timestep, giving O(T^2) total complexity.
+ * For better performance, use checkpointing (store every K-th timestep).
+ */
+inline void recompute_alpha_to(
+    int target_t,
+    int L_b,
+    int B,
+    int C,
+    int b,
+    int blank,
+    uint tid,
+    uint tg_size,
+    device const float* log_probs,
+    device const int* targets_b,
+    threadgroup float* alpha_prev,
+    threadgroup float* alpha_curr
+) {
+    // Init t=0
+    for (int s = tid; s < L_b; s += tg_size) {
+        float val = NEG_INF;
+        if (s == 0) {
+            val = log_probs[0 * (B * C) + b * C + blank];
+        } else if (s == 1) {
+            val = log_probs[0 * (B * C) + b * C + targets_b[0]];
+        }
+        alpha_curr[s] = val;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Forward to target_t (inclusive)
+    for (int t = 1; t <= target_t; t++) {
+        for (int s = tid; s < L_b; s += tg_size) {
+            alpha_prev[s] = alpha_curr[s];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        for (int s = tid; s < L_b; s += tg_size) {
+            int label = get_label(s, targets_b, blank);
+            float score = alpha_prev[s];  // stay
+            if (s > 0) {
+                score = log_sum_exp(score, alpha_prev[s-1]);
+            }
+            if (s > 1 && label != blank && label != get_label(s-2, targets_b, blank)) {
+                score = log_sum_exp(score, alpha_prev[s-2]);
+            }
+            alpha_curr[s] = score + log_probs[t * (B * C) + b * C + label];
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+}
+
+/**
+ * Combined CTC Forward-Backward-Gradient Kernel
+ *
+ * Strategy:
+ * - One THREADGROUP per batch element
+ * - Multiple THREADS parallelize over states within each timestep
+ * - Uses rolling buffers (only 2 timesteps of alpha/beta in memory)
+ * - Recomputes alpha during backward pass for gradient computation
+ *
+ * Complexity: O(T^2 * L) due to alpha recomputation
+ */
+kernel void ctc_forward_backward_combined(
+    // Input buffers
+    device const float* log_probs       [[buffer(0)]],   // [T, B, C]
+    device const int*   targets         [[buffer(1)]],   // [B, S]
+    device const int*   input_lengths   [[buffer(2)]],   // [B]
+    device const int*   target_lengths  [[buffer(3)]],   // [B]
+    device const float* grad_output     [[buffer(4)]],   // [B]
+
+    // Output buffers
+    device float*       grad            [[buffer(5)]],   // [T, B, C]
+    device float*       losses          [[buffer(6)]],   // [B]
+
+    // Constants
+    constant int&       T               [[buffer(7)]],
+    constant int&       B               [[buffer(8)]],
+    constant int&       C               [[buffer(9)]],
+    constant int&       S               [[buffer(10)]],
+    constant int&       blank           [[buffer(11)]],
+
+    // Thread info
+    uint tid           [[thread_index_in_threadgroup]],
+    uint tg_size       [[threads_per_threadgroup]],
+    uint tg_id         [[threadgroup_position_in_grid]],
+    uint simd_lane_id  [[thread_index_in_simdgroup]],
+    uint simd_group_id [[simdgroup_index_in_threadgroup]],
+    uint simd_size     [[threads_per_simdgroup]]
+) {
+    // =========================================================================
+    // SECTION 1: SETUP
+    // =========================================================================
+
+    int b = tg_id;
+    if (b >= B) return;
+
+    int T_b = input_lengths[b];
+    int S_b = target_lengths[b];
+    int L_b = 2 * S_b + 1;
+    int L = 2 * S + 1;
+
+    device const int* targets_b = targets + b * S;
+    float grad_out_b = grad_output[b];
+
+    // =========================================================================
+    // SECTION 2: THREADGROUP MEMORY
+    // =========================================================================
+
+    // Rolling alpha buffers
+    threadgroup float alpha_prev[MAX_L];
+    threadgroup float alpha_curr[MAX_L];
+
+    // Rolling beta buffers
+    threadgroup float beta_prev[MAX_L];
+    threadgroup float beta_curr[MAX_L];
+
+    // Shared scalar
+    threadgroup float total_log_prob_shared;
+
+    uint num_simd_groups = (tg_size + simd_size - 1) / simd_size;  // Number of SIMD groups
+
+    // =========================================================================
+    // SECTION 3: FORWARD PASS (to compute loss)
+    // =========================================================================
+
+    // Compute alpha up to T_b - 1 (last valid timestep)
+    recompute_alpha_to(T_b - 1, L_b, B, C, b, blank, tid, tg_size, log_probs, targets_b, alpha_prev, alpha_curr);
+
+    // Compute total_log_prob from final alpha
+    //   - Only tid == 0 computes and stores to total_log_prob_shared
+    //   - threadgroup_barrier
+    //   - All threads read total_log_prob
+    if (tid == 0) {
+        float final_blank = alpha_curr[L_b - 1];
+        float final_char = (L_b > 1) ? alpha_curr[L_b - 2] : NEG_INF;
+        total_log_prob_shared = log_sum_exp(final_blank, final_char);
+        losses[b] = -total_log_prob_shared;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    float total_log_prob = total_log_prob_shared;
+
+    // =========================================================================
+    // SECTION 4: INITIALIZE BETA AT t = T_b - 1
+    // =========================================================================
+
+    for (int s = tid; s < L_b; s += tg_size) {
+        beta_curr[s] = (s == L_b - 1 || s == L_b - 2) ? 0.0f : NEG_INF;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // =========================================================================
+    // SECTION 5: BACKWARD RECURSION t = T_b - 1 down to 0
+    // =========================================================================
+
+    for (int t = T_b - 1; t >= 0; t--) {
+        recompute_alpha_to(t, L_b, B, C, b, blank, tid, tg_size, log_probs, targets_b, alpha_prev, alpha_curr);
+
+        // Compute gradients.
+        // For each class c:
+        //   posterior = sum over s where label[s]==c of exp(alpha[t,s] + beta[t,s])
+        //   grad[t,b,c] = -(posterior/total_prob - prob[t,b,c]) * grad_output[b]
+        for (int c = simd_group_id; c < C; c += num_simd_groups) {
+            float local_sum = NEG_INF;
+            for (int s = simd_lane_id; s < L_b; s += simd_size) {
+                if (get_label(s, targets_b, blank) == c) {
+                    local_sum = log_sum_exp(local_sum, alpha_curr[s] + beta_curr[s]);
+                }
+            }
+
+            float log_posterior = simd_log_sum_exp_reduce(local_sum, simd_size);
+            if (simd_lane_id == 0) {
+                float posterior = (log_posterior == NEG_INF) ? 0.0f : exp(log_posterior - total_log_prob);
+                float prob = exp(log_probs[t * (B * C) + b * C + c]);
+                grad[t * (B * C) + b * C + c] = -(posterior - prob) * grad_out_b;
+            }
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        if (t > 0) {
+            // Swap: beta_curr becomes beta_prev
+            for (int s = tid; s < L_b; s += tg_size) {
+                beta_prev[s] = beta_curr[s];
+            }
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+
+            // Compute beta[t-1] from beta[t]
+            for (int s = tid; s < L_b; s += tg_size) {
+                int label = get_label(s, targets_b, blank);
+                // Transition: stay at s
+                float score = beta_prev[s] + log_probs[t * (B * C) + b * C + label];
+
+                // Transition: advance to s+1
+                if (s + 1 < L_b) {
+                    int label_s1 = get_label(s + 1, targets_b, blank);
+                    score = log_sum_exp(score, beta_prev[s + 1] + log_probs[t * (B * C) + b * C + label_s1]);
+                }
+
+                // Transition: skip to s+2
+                if (s + 2 < L_b) {
+                    int label_s2 = get_label(s + 2, targets_b, blank);
+                    // Skip allowed if label_s2 is not blank and different from label at s
+                    if (label_s2 != blank && label_s2 != label) {
+                        score = log_sum_exp(score, beta_prev[s + 2] + log_probs[t * (B * C) + b * C + label_s2]);
+                    }
+                }
+
+                beta_curr[s] = score;
+            }
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+        }
+    }
+
+    // =========================================================================
+    // SECTION 6: ZERO GRADIENTS BEYOND T_b
+    // =========================================================================
+
+    for (int t = T_b; t < T; t++) {
+        for (int c = tid; c < C; c += tg_size) {
+            grad[t * (B * C) + b * C + c] = 0.0f;
+        }
+    }
+}
