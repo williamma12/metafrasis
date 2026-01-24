@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metafrasis - Ancient Greek OCR</title>
+    <meta name="description" content="Free, open-source OCR application for Ancient Greek manuscripts. Recognizes printed and handwritten text with high accuracy.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color-primary: #2563eb;
+            --color-primary-dark: #1d4ed8;
+            --color-secondary: #64748b;
+            --color-background: #ffffff;
+            --color-surface: #f8fafc;
+            --color-border: #e2e8f0;
+            --color-text: #1e293b;
+            --color-text-secondary: #64748b;
+            --color-success: #22c55e;
+            --color-warning: #f59e0b;
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-serif: 'Noto Serif', Georgia, serif;
+            --max-width: 1100px;
+            --radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            color: var(--color-text);
+            line-height: 1.6;
+            background: var(--color-background);
+        }
+
+        a {
+            color: var(--color-primary);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Header */
+        header {
+            padding: 16px 0;
+            border-bottom: 1px solid var(--color-border);
+            position: sticky;
+            top: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+
+        header .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--color-text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-icon {
+            font-size: 1.75rem;
+        }
+
+        nav {
+            display: flex;
+            gap: 32px;
+        }
+
+        nav a {
+            color: var(--color-text-secondary);
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        nav a:hover {
+            color: var(--color-text);
+            text-decoration: none;
+        }
+
+        /* Hero */
+        .hero {
+            padding: 80px 0 60px;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
+        }
+
+        .hero .greek {
+            font-family: var(--font-serif);
+            color: var(--color-primary);
+        }
+
+        .hero .tagline {
+            font-size: 1.35rem;
+            color: var(--color-text-secondary);
+            max-width: 600px;
+            margin: 0 auto 40px;
+        }
+
+        .download-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 32px;
+            border-radius: var(--radius);
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: var(--color-primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--color-primary-dark);
+            text-decoration: none;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        .download-info {
+            font-size: 0.9rem;
+            color: var(--color-text-secondary);
+        }
+
+        .download-info strong {
+            color: var(--color-text);
+        }
+
+        /* Features */
+        .features {
+            padding: 80px 0;
+            background: var(--color-surface);
+        }
+
+        .section-title {
+            font-size: 2rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 32px;
+        }
+
+        .feature-card {
+            background: white;
+            padding: 32px;
+            border-radius: var(--radius);
+            border: 1px solid var(--color-border);
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 16px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 8px;
+        }
+
+        .feature-card p {
+            color: var(--color-text-secondary);
+        }
+
+        /* Installation */
+        .installation {
+            padding: 80px 0;
+        }
+
+        .steps {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .step {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .step-number {
+            flex-shrink: 0;
+            width: 48px;
+            height: 48px;
+            background: var(--color-primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.25rem;
+        }
+
+        .step-content h3 {
+            font-size: 1.25rem;
+            margin-bottom: 8px;
+        }
+
+        .step-content p {
+            color: var(--color-text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .step-content img {
+            max-width: 100%;
+            border-radius: 8px;
+            border: 1px solid var(--color-border);
+            margin-top: 12px;
+        }
+
+        .note {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 12px;
+        }
+
+        .note-title {
+            font-weight: 600;
+            color: #92400e;
+            margin-bottom: 4px;
+        }
+
+        .note p {
+            color: #92400e;
+            font-size: 0.95rem;
+        }
+
+        code {
+            background: var(--color-surface);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Consolas, monospace;
+            font-size: 0.9em;
+        }
+
+        /* Usage */
+        .usage {
+            padding: 80px 0;
+            background: var(--color-surface);
+        }
+
+        .usage-content {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .usage-step {
+            background: white;
+            border-radius: var(--radius);
+            border: 1px solid var(--color-border);
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+
+        .usage-step h3 {
+            font-size: 1.25rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .usage-step h3 span {
+            background: var(--color-primary);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+        }
+
+        .usage-step p {
+            color: var(--color-text-secondary);
+        }
+
+        .usage-step ul {
+            margin-top: 12px;
+            margin-left: 24px;
+            color: var(--color-text-secondary);
+        }
+
+        .usage-step li {
+            margin-bottom: 6px;
+        }
+
+        /* Requirements */
+        .requirements {
+            padding: 80px 0;
+        }
+
+        .requirements-content {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .req-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 24px;
+        }
+
+        .req-table th,
+        .req-table td {
+            text-align: left;
+            padding: 16px;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .req-table th {
+            font-weight: 600;
+            color: var(--color-text-secondary);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .check {
+            color: var(--color-success);
+        }
+
+        /* Footer */
+        footer {
+            padding: 48px 0;
+            border-top: 1px solid var(--color-border);
+            text-align: center;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-bottom: 24px;
+        }
+
+        .footer-links a {
+            color: var(--color-text-secondary);
+        }
+
+        .copyright {
+            color: var(--color-text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero .tagline {
+                font-size: 1.15rem;
+            }
+
+            nav {
+                display: none;
+            }
+
+            .step {
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .footer-links {
+                flex-direction: column;
+                gap: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="logo">
+                <span class="logo-icon">&#x03BC;</span>
+                Metafrasis
+            </div>
+            <nav>
+                <a href="#features">Features</a>
+                <a href="#installation">Installation</a>
+                <a href="#usage">Usage</a>
+                <a href="https://github.com/williamma12/metafrasis">GitHub</a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h1>
+                    <span class="greek">&#x039C;&#x03B5;&#x03C4;&#x03AC;&#x03C6;&#x03C1;&#x03B1;&#x03C3;&#x03B9;&#x03C2;</span>
+                </h1>
+                <p class="tagline">
+                    Free, open-source OCR for Ancient Greek manuscripts.
+                    Extract text from printed books and handwritten documents with ease.
+                </p>
+                <div class="download-section">
+                    <a href="https://github.com/williamma12/metafrasis/releases/latest/download/Metafrasis.dmg" class="btn btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Download for macOS
+                    </a>
+                    <p class="download-info">
+                        <strong>Version 1.0.0</strong> &middot; macOS 10.15+ &middot; Intel & Apple Silicon
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section class="features" id="features">
+            <div class="container">
+                <h2 class="section-title">Features</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">&#x1F4DC;</div>
+                        <h3>Ancient Greek OCR</h3>
+                        <p>Specialized recognition for polytonic Greek text, including accents, breathing marks, and archaic characters.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#x270D;&#xFE0F;</div>
+                        <h3>Handwriting Support</h3>
+                        <p>Powered by trOCR transformer models for accurate recognition of handwritten manuscripts.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#x1F4C4;</div>
+                        <h3>PDF Support</h3>
+                        <p>Upload multi-page PDFs and process them automatically. Each page is converted and OCR'd.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#x1F50D;</div>
+                        <h3>Interactive Viewer</h3>
+                        <p>View recognized text with word-level bounding boxes. Click to toggle, hover for details.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#x26A1;</div>
+                        <h3>GPU Accelerated</h3>
+                        <p>Automatic GPU detection for faster processing. Supports CUDA and Apple Silicon (MPS).</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">&#x1F4BB;</div>
+                        <h3>Fully Offline</h3>
+                        <p>Everything runs locally on your machine. Your documents never leave your computer.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="installation" id="installation">
+            <div class="container">
+                <h2 class="section-title">Installation</h2>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3>Download the DMG</h3>
+                            <p>Click the download button above to get the latest version of Metafrasis.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3>Open the DMG</h3>
+                            <p>Double-click the downloaded <code>Metafrasis.dmg</code> file to mount it.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3>Drag to Applications</h3>
+                            <p>Drag the Metafrasis app to your Applications folder.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h3>Launch the App</h3>
+                            <p>Open Metafrasis from your Applications folder or Launchpad.</p>
+                            <div class="note">
+                                <div class="note-title">First Launch Note</div>
+                                <p>
+                                    Since the app isn't signed with an Apple Developer ID, macOS may show a warning.
+                                    To open it: <strong>Right-click</strong> (or Control-click) the app and select <strong>"Open"</strong>,
+                                    then click <strong>"Open"</strong> in the dialog.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="usage" id="usage">
+            <div class="container">
+                <h2 class="section-title">How to Use</h2>
+                <div class="usage-content">
+                    <div class="usage-step">
+                        <h3><span>1</span> Select an OCR Engine</h3>
+                        <p>Choose from the sidebar:</p>
+                        <ul>
+                            <li><strong>Tesseract</strong> &ndash; Fast, best for printed text</li>
+                            <li><strong>trOCR</strong> &ndash; Slower but excellent for handwritten manuscripts</li>
+                        </ul>
+                    </div>
+                    <div class="usage-step">
+                        <h3><span>2</span> Upload Your Files</h3>
+                        <p>Drag and drop or click to upload:</p>
+                        <ul>
+                            <li>Images: PNG, JPG, JPEG</li>
+                            <li>Documents: PDF (multi-page supported)</li>
+                        </ul>
+                    </div>
+                    <div class="usage-step">
+                        <h3><span>3</span> Run OCR</h3>
+                        <p>
+                            Click the "Run OCR" button. Processing time depends on your hardware and the selected engine.
+                            GPU acceleration is used automatically when available.
+                        </p>
+                    </div>
+                    <div class="usage-step">
+                        <h3><span>4</span> View Results</h3>
+                        <p>
+                            The interactive viewer shows recognized text overlaid on your image.
+                            Click words to toggle visibility, hover for confidence scores.
+                            Copy the extracted text or export your results.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="requirements" id="requirements">
+            <div class="container">
+                <h2 class="section-title">System Requirements</h2>
+                <div class="requirements-content">
+                    <table class="req-table">
+                        <tr>
+                            <th>Requirement</th>
+                            <th>Minimum</th>
+                            <th>Recommended</th>
+                        </tr>
+                        <tr>
+                            <td>macOS</td>
+                            <td>10.15 (Catalina)</td>
+                            <td>13.0+ (Ventura)</td>
+                        </tr>
+                        <tr>
+                            <td>Processor</td>
+                            <td>Intel or Apple Silicon</td>
+                            <td>Apple Silicon (M1/M2/M3)</td>
+                        </tr>
+                        <tr>
+                            <td>Memory</td>
+                            <td>4 GB RAM</td>
+                            <td>8 GB+ RAM</td>
+                        </tr>
+                        <tr>
+                            <td>Storage</td>
+                            <td>2 GB free space</td>
+                            <td>5 GB+ free space</td>
+                        </tr>
+                    </table>
+                    <p style="margin-top: 24px; color: var(--color-text-secondary);">
+                        <strong>Note:</strong> First launch may take longer as models are initialized.
+                        Additional OCR models are downloaded on first use (~500 MB).
+                    </p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://github.com/williamma12/metafrasis">GitHub Repository</a>
+                <a href="https://github.com/williamma12/metafrasis/issues">Report an Issue</a>
+                <a href="https://github.com/williamma12/metafrasis/releases">All Releases</a>
+                <a href="QUICKSTART.html">Documentation</a>
+            </div>
+            <p class="copyright">
+                Metafrasis is open source software.
+                Made with care for scholars and researchers.
+            </p>
+        </div>
+    </footer>
+</body>
+</html>
