@@ -7,7 +7,8 @@ import torch
 from pathlib import Path
 
 # Project directories
-PROJECT_ROOT = Path(__file__).parent
+# Support bundled mode via environment variable override
+PROJECT_ROOT = Path(os.environ.get('METAFRASIS_ROOT', Path(__file__).parent))
 MODELS_DIR = PROJECT_ROOT / "models"
 DATA_DIR = PROJECT_ROOT / "data"
 MODEL_WEIGHTS_DIR = DATA_DIR / "model_weights"
@@ -36,12 +37,16 @@ ANNOTATION_CANVAS_RELEASE_MODE = os.getenv('ANNOTATION_CANVAS_RELEASE', 'false')
 
 def get_device() -> str:
     """
-    Auto-detect best available device (CUDA GPU or CPU)
+    Auto-detect best available device (CUDA GPU, Apple Silicon MPS, or CPU)
 
     Returns:
-        Device string ('cuda' or 'cpu')
+        Device string ('cuda', 'mps', or 'cpu')
     """
-    return 'cuda' if torch.cuda.is_available() else 'cpu'
+    if torch.cuda.is_available():
+        return 'cuda'
+    elif torch.backends.mps.is_available():
+        return 'mps'
+    return 'cpu'
 
 
 def get_model_registry() -> dict:

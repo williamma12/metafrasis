@@ -303,6 +303,42 @@ VIEWER_RELEASE=true uv run streamlit run app.py
 - All tests must pass
 - Node.js, npm, and uv installed
 
+## Building macOS Installer
+
+Create a standalone .app bundle and DMG installer for non-technical users:
+
+```bash
+# Build for your current architecture (Intel or Apple Silicon)
+./installer/build.sh
+
+# Build with specific version
+./installer/build.sh 1.0.0
+
+# Build universal binary (Intel + Apple Silicon)
+./installer/build.sh 1.0.0 --universal
+
+# Build with code signing (requires Apple Developer ID)
+export CODESIGN_IDENTITY="Developer ID Application: Your Name (XXXXXXXXXX)"
+./installer/build.sh 1.0.0 --sign
+```
+
+**Output:**
+- `installer/output/Metafrasis.app` - The standalone application
+- `installer/output/Metafrasis-1.0.0.dmg` - DMG installer for distribution
+
+**What gets bundled:**
+- Python runtime and all dependencies
+- Tesseract OCR with Ancient Greek language data
+- Poppler (for PDF support)
+- Pre-built React components
+- PyTorch (for trOCR engine)
+
+**Size:** ~1GB for single architecture, ~1.8GB for universal binary
+
+**Note:** Without code signing, users will need to right-click → Open on first launch to bypass Gatekeeper.
+
+See [installer/README.md](../installer/README.md) for detailed documentation.
+
 ## Troubleshooting
 
 ### Tesseract Not Found
@@ -340,6 +376,22 @@ brew install poppler
 
 # Linux
 sudo apt install poppler-utils
+```
+
+### macOS Installer Issues
+
+**"App is damaged and can't be opened"**
+
+The app isn't signed. Right-click the app and select "Open", then click "Open" in the dialog. Or remove the quarantine attribute:
+```bash
+xattr -cr /Applications/Metafrasis.app
+```
+
+**Build fails with missing dependencies**
+
+Ensure Tesseract and Poppler are installed:
+```bash
+brew install tesseract poppler create-dmg
 ```
 
 ## Next Steps
