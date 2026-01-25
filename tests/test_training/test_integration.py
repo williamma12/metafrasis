@@ -10,13 +10,13 @@ from pathlib import Path
 from PIL import Image
 import numpy as np
 
-from services.annotation.models import (
+from app.services.annotation.models import (
     AnnotationDataset,
     AnnotatedImage,
     Region,
     Point,
 )
-from services.annotation.storage import AnnotationStorage
+from app.services.annotation.storage import AnnotationStorage
 
 
 class TestDetectorTrainingPipeline:
@@ -99,7 +99,7 @@ class TestDetectorTrainingPipeline:
     @pytest.mark.slow
     def test_db_trainer_runs(self, training_config):
         """Test that DB trainer can run on minimal dataset."""
-        from training.finetune.detectors.db import DBTrainer
+        from ml.training.finetune.detectors.db import DBTrainer
 
         trainer = DBTrainer(training_config)
         results = trainer.train()
@@ -118,7 +118,7 @@ class TestDetectorTrainingPipeline:
     @pytest.mark.slow
     def test_craft_trainer_runs(self, training_config):
         """Test that CRAFT trainer can run on minimal dataset."""
-        from training.finetune.detectors.craft import CRAFTTrainer
+        from ml.training.finetune.detectors.craft import CRAFTTrainer
 
         trainer = CRAFTTrainer(training_config)
         results = trainer.train()
@@ -206,7 +206,7 @@ class TestRecognizerTrainingPipeline:
     @pytest.mark.slow
     def test_crnn_trainer_runs(self, recognizer_config):
         """Test that CRNN trainer can run on minimal dataset."""
-        from training.finetune.recognizers.crnn import CRNNTrainer
+        from ml.training.finetune.recognizers.crnn import CRNNTrainer
 
         trainer = CRNNTrainer(recognizer_config)
         results = trainer.train()
@@ -260,8 +260,8 @@ class TestDatasetLoading:
 
     def test_detector_dataset_loads_annotation_format(self, annotation_dataset, tmp_path):
         """Test that detector dataset can load from annotation format."""
-        from training.finetune.detectors.db import DBDataset
-        from training.finetune.base import ZipExportStorage
+        from ml.training.finetune.detectors.db import DBDataset
+        from ml.training.finetune.base import ZipExportStorage
 
         storage = ZipExportStorage(annotation_dataset)
         data = storage.load("dataset")
@@ -286,8 +286,8 @@ class TestDatasetLoading:
 
     def test_recognizer_dataset_loads_annotation_format(self, annotation_dataset, tmp_path):
         """Test that recognizer dataset can load from annotation format."""
-        from training.finetune.recognizers.base import RecognizerDataset
-        from training.finetune.base import ZipExportStorage
+        from ml.training.finetune.recognizers.base import RecognizerDataset
+        from ml.training.finetune.base import ZipExportStorage
 
         storage = ZipExportStorage(annotation_dataset)
         data = storage.load("dataset")

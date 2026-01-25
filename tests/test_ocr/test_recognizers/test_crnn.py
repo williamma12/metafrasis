@@ -5,8 +5,8 @@ import pytest
 import torch
 import numpy as np
 from PIL import Image
-from services.ocr.recognizers.crnn import CRNNRecognizer, CRNN
-from services.ocr.base import TextRegion, Word, BoundingBox
+from app.services.ocr.recognizers.crnn import CRNNRecognizer, CRNN
+from app.services.ocr.base import TextRegion, Word, BoundingBox
 
 
 @pytest.mark.requires_crnn

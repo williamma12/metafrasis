@@ -3,8 +3,8 @@ Tests for WholeImageDetector
 """
 import pytest
 from PIL import Image
-from services.ocr.detectors.whole_image import WholeImageDetector
-from services.ocr.base import TextRegion, BoundingBox
+from app.services.ocr.detectors.whole_image import WholeImageDetector
+from app.services.ocr.base import TextRegion, BoundingBox
 
 
 class TestWholeImageDetector:

@@ -4,8 +4,8 @@ Tests for TrOCRRecognizer
 import pytest
 from PIL import Image
 from unittest.mock import patch, MagicMock
-from services.ocr.recognizers.trocr import TrOCRRecognizer
-from services.ocr.base import TextRegion, Word, BoundingBox
+from app.services.ocr.recognizers.trocr import TrOCRRecognizer
+from app.services.ocr.base import TextRegion, Word, BoundingBox
 
 
 class TestTrOCRRecognizer:
@@ -37,8 +37,8 @@ class TestTrOCRRecognizer:
 
         assert recognizer.name == "trocr"
 
-    @patch('services.ocr.recognizers.trocr.VisionEncoderDecoderModel')
-    @patch('services.ocr.recognizers.trocr.TrOCRProcessor')
+    @patch('app.services.ocr.recognizers.trocr.VisionEncoderDecoderModel')
+    @patch('app.services.ocr.recognizers.trocr.TrOCRProcessor')
     def test_load_model(self, mock_processor_class, mock_model_class):
         """Test model loading"""
         mock_processor = MagicMock()
@@ -55,8 +55,8 @@ class TestTrOCRRecognizer:
         mock_model.to.assert_called_once()
         mock_model.eval.assert_called_once()
 
-    @patch('services.ocr.recognizers.trocr.VisionEncoderDecoderModel')
-    @patch('services.ocr.recognizers.trocr.TrOCRProcessor')
+    @patch('app.services.ocr.recognizers.trocr.VisionEncoderDecoderModel')
+    @patch('app.services.ocr.recognizers.trocr.TrOCRProcessor')
     def test_recognize_regions_single(self, mock_processor_class, mock_model_class):
         """Test recognizing a single region"""
         # Setup mocks
@@ -86,8 +86,8 @@ class TestTrOCRRecognizer:
         assert words[0].bbox == bbox
         assert words[0].confidence == 0.9  # Uses detection confidence
 
-    @patch('services.ocr.recognizers.trocr.VisionEncoderDecoderModel')
-    @patch('services.ocr.recognizers.trocr.TrOCRProcessor')
+    @patch('app.services.ocr.recognizers.trocr.VisionEncoderDecoderModel')
+    @patch('app.services.ocr.recognizers.trocr.TrOCRProcessor')
     def test_recognize_regions_batch(self, mock_processor_class, mock_model_class):
         """Test batch recognition of multiple regions"""
         # Setup mocks
@@ -123,8 +123,8 @@ class TestTrOCRRecognizer:
         assert words[1].confidence == pytest.approx(0.9, abs=0.01)
         assert words[2].confidence == pytest.approx(1.0, abs=0.01)
 
-    @patch('services.ocr.recognizers.trocr.VisionEncoderDecoderModel')
-    @patch('services.ocr.recognizers.trocr.TrOCRProcessor')
+    @patch('app.services.ocr.recognizers.trocr.VisionEncoderDecoderModel')
+    @patch('app.services.ocr.recognizers.trocr.TrOCRProcessor')
     def test_recognize_regions_empty(self, mock_processor_class, mock_model_class):
         """Test recognition with empty region list"""
         mock_processor = MagicMock()
@@ -139,8 +139,8 @@ class TestTrOCRRecognizer:
 
         assert len(words) == 0
 
-    @patch('services.ocr.recognizers.trocr.VisionEncoderDecoderModel')
-    @patch('services.ocr.recognizers.trocr.TrOCRProcessor')
+    @patch('app.services.ocr.recognizers.trocr.VisionEncoderDecoderModel')
+    @patch('app.services.ocr.recognizers.trocr.TrOCRProcessor')
     def test_recognize_regions_batching(self, mock_processor_class, mock_model_class):
         """Test that large batches are split correctly"""
         mock_processor = MagicMock()

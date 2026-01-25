@@ -19,12 +19,12 @@ class TestCRNNTrainer:
 
     def test_import(self):
         """Test that CRNNTrainer can be imported."""
-        from training.finetune import CRNNTrainer
+        from ml.training.finetune import CRNNTrainer
         assert CRNNTrainer is not None
 
     def test_name_property(self, temp_dir):
         """Test trainer name property."""
-        from training.finetune import CRNNTrainer
+        from ml.training.finetune import CRNNTrainer
 
         config = {"output_dir": str(temp_dir), "data_dir": str(temp_dir)}
         trainer = CRNNTrainer(config)
@@ -32,7 +32,7 @@ class TestCRNNTrainer:
 
     def test_inherits_from_ctc_trainer(self):
         """Test that CRNNTrainer inherits from CTCRecognizerTrainer."""
-        from training.finetune import CRNNTrainer, CTCRecognizerTrainer
+        from ml.training.finetune import CRNNTrainer, CTCRecognizerTrainer
 
         assert issubclass(CRNNTrainer, CTCRecognizerTrainer)
 
@@ -47,12 +47,12 @@ class TestPPOCRTrainer:
 
     def test_import(self):
         """Test that PPOCRTrainer can be imported."""
-        from training.finetune import PPOCRTrainer
+        from ml.training.finetune import PPOCRTrainer
         assert PPOCRTrainer is not None
 
     def test_name_property(self, temp_dir):
         """Test trainer name property."""
-        from training.finetune import PPOCRTrainer
+        from ml.training.finetune import PPOCRTrainer
 
         config = {"output_dir": str(temp_dir), "data_dir": str(temp_dir)}
         trainer = PPOCRTrainer(config)
@@ -60,13 +60,13 @@ class TestPPOCRTrainer:
 
     def test_inherits_from_ctc_trainer(self):
         """Test that PPOCRTrainer inherits from CTCRecognizerTrainer."""
-        from training.finetune import PPOCRTrainer, CTCRecognizerTrainer
+        from ml.training.finetune import PPOCRTrainer, CTCRecognizerTrainer
 
         assert issubclass(PPOCRTrainer, CTCRecognizerTrainer)
 
     def test_has_gradient_accumulation(self, temp_dir):
         """Test that PPOCRTrainer has accumulation step tracking."""
-        from training.finetune import PPOCRTrainer
+        from ml.training.finetune import PPOCRTrainer
 
         config = {
             "output_dir": str(temp_dir),
@@ -87,12 +87,12 @@ class TestTrOCRTrainer:
 
     def test_import(self):
         """Test that TrOCRTrainer can be imported."""
-        from training.finetune import TrOCRTrainer
+        from ml.training.finetune import TrOCRTrainer
         assert TrOCRTrainer is not None
 
     def test_name_property(self, temp_dir):
         """Test trainer name property."""
-        from training.finetune import TrOCRTrainer
+        from ml.training.finetune import TrOCRTrainer
 
         config = {"output_dir": str(temp_dir), "data_dir": str(temp_dir)}
         trainer = TrOCRTrainer(config)
@@ -100,13 +100,13 @@ class TestTrOCRTrainer:
 
     def test_inherits_from_transformer_trainer(self):
         """Test that TrOCRTrainer inherits from TransformerRecognizerTrainer."""
-        from training.finetune import TrOCRTrainer, TransformerRecognizerTrainer
+        from ml.training.finetune import TrOCRTrainer, TransformerRecognizerTrainer
 
         assert issubclass(TrOCRTrainer, TransformerRecognizerTrainer)
 
     def test_lora_config_defaults(self, temp_dir):
         """Test that LoRA config has defaults."""
-        from training.finetune import TrOCRTrainer
+        from ml.training.finetune import TrOCRTrainer
 
         config = {"output_dir": str(temp_dir), "data_dir": str(temp_dir)}
         trainer = TrOCRTrainer(config)
@@ -126,12 +126,12 @@ class TestCRAFTTrainer:
 
     def test_import(self):
         """Test that CRAFTTrainer can be imported."""
-        from training.finetune import CRAFTTrainer
+        from ml.training.finetune import CRAFTTrainer
         assert CRAFTTrainer is not None
 
     def test_name_property(self, temp_dir):
         """Test trainer name property."""
-        from training.finetune import CRAFTTrainer
+        from ml.training.finetune import CRAFTTrainer
 
         config = {"output_dir": str(temp_dir), "data_dir": str(temp_dir)}
         trainer = CRAFTTrainer(config)
@@ -139,7 +139,7 @@ class TestCRAFTTrainer:
 
     def test_inherits_from_detector_trainer(self):
         """Test that CRAFTTrainer inherits from DetectorTrainer."""
-        from training.finetune import CRAFTTrainer, DetectorTrainer
+        from ml.training.finetune import CRAFTTrainer, DetectorTrainer
 
         assert issubclass(CRAFTTrainer, DetectorTrainer)
 
@@ -154,12 +154,12 @@ class TestDBTrainer:
 
     def test_import(self):
         """Test that DBTrainer can be imported."""
-        from training.finetune import DBTrainer
+        from ml.training.finetune import DBTrainer
         assert DBTrainer is not None
 
     def test_name_property(self, temp_dir):
         """Test trainer name property."""
-        from training.finetune import DBTrainer
+        from ml.training.finetune import DBTrainer
 
         config = {"output_dir": str(temp_dir), "data_dir": str(temp_dir)}
         trainer = DBTrainer(config)
@@ -167,7 +167,7 @@ class TestDBTrainer:
 
     def test_inherits_from_detector_trainer(self):
         """Test that DBTrainer inherits from DetectorTrainer."""
-        from training.finetune import DBTrainer, DetectorTrainer
+        from ml.training.finetune import DBTrainer, DetectorTrainer
 
         assert issubclass(DBTrainer, DetectorTrainer)
 
@@ -177,12 +177,12 @@ class TestCRAFTLoss:
 
     def test_import(self):
         """Test that CRAFTLoss can be imported."""
-        from training.finetune.detectors import CRAFTLoss
+        from ml.training.finetune.detectors import CRAFTLoss
         assert CRAFTLoss is not None
 
     def test_loss_computation(self):
         """Test loss computation with mock inputs."""
-        from training.finetune.detectors import CRAFTLoss
+        from ml.training.finetune.detectors import CRAFTLoss
 
         loss_fn = CRAFTLoss(neg_ratio=3.0)
 
@@ -213,12 +213,12 @@ class TestDBLoss:
 
     def test_import(self):
         """Test that DBLoss can be imported."""
-        from training.finetune.detectors import DBLoss
+        from ml.training.finetune.detectors import DBLoss
         assert DBLoss is not None
 
     def test_loss_computation(self):
         """Test loss computation with mock inputs."""
-        from training.finetune.detectors import DBLoss
+        from ml.training.finetune.detectors import DBLoss
 
         loss_fn = DBLoss(bce_weight=1.0, l1_weight=10.0, dice_weight=1.0)
 
@@ -257,12 +257,12 @@ class TestRecognizerDataset:
 
     def test_import(self):
         """Test that RecognizerDataset can be imported."""
-        from training.finetune.recognizers import RecognizerDataset
+        from ml.training.finetune.recognizers import RecognizerDataset
         assert RecognizerDataset is not None
 
     def test_dataset_creation(self, temp_dir):
         """Test creating a dataset with sample data."""
-        from training.finetune.recognizers import RecognizerDataset
+        from ml.training.finetune.recognizers import RecognizerDataset
         from PIL import Image
 
         # Create sample data
@@ -293,5 +293,5 @@ class TestDetectorDataset:
 
     def test_import(self):
         """Test that DetectorDataset can be imported."""
-        from training.finetune.detectors import DetectorDataset
+        from ml.training.finetune.detectors import DetectorDataset
         assert DetectorDataset is not None

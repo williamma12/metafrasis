@@ -3,7 +3,7 @@ Tests for OCR base classes and data structures
 """
 import pytest
 import numpy as np
-from services.ocr.base import (
+from app.services.ocr.base import (
     BoundingBox,
     Word,
     ConfidenceStats,

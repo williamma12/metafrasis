@@ -1,7 +1,7 @@
 """Tests for recognizer evaluation metrics."""
 
 import pytest
-from training.evaluate.recognizers import (
+from ml.training.evaluate.recognizers import (
     RecognizerMetric,
     CERMetric,
     NormalizedEditDistanceMetric,

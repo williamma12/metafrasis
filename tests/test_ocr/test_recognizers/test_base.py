@@ -3,8 +3,8 @@ Tests for TextRecognizer base class
 """
 import pytest
 from PIL import Image
-from services.ocr.recognizers.base import TextRecognizer
-from services.ocr.base import TextRegion, Word, BoundingBox
+from app.services.ocr.recognizers.base import TextRecognizer
+from app.services.ocr.base import TextRegion, Word, BoundingBox
 
 
 class MockRecognizer(TextRecognizer):

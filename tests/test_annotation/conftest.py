@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 from PIL import Image
 
-from services.annotation import (
+from app.services.annotation import (
     Point,
     Region,
     AnnotatedImage,

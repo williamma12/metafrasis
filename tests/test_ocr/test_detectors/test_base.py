@@ -3,8 +3,8 @@ Tests for TextDetector base class
 """
 import pytest
 from PIL import Image
-from services.ocr.detectors.base import TextDetector
-from services.ocr.base import TextRegion, BoundingBox
+from app.services.ocr.detectors.base import TextDetector
+from app.services.ocr.base import TextRegion, BoundingBox
 
 
 class MockDetector(TextDetector):

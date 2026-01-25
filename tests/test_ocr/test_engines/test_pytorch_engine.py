@@ -4,8 +4,8 @@ Tests for PyTorchOCREngine
 import pytest
 from PIL import Image
 from unittest.mock import MagicMock
-from services.ocr.engines.pytorch_engine import PyTorchOCREngine
-from services.ocr.base import TextRegion, Word, BoundingBox, OCRResult
+from app.services.ocr.engines.pytorch_engine import PyTorchOCREngine
+from app.services.ocr.base import TextRegion, Word, BoundingBox, OCRResult
 
 
 class MockDetector:

@@ -4,7 +4,7 @@ Tests for OCR preprocessing utilities
 import pytest
 from pathlib import Path
 from PIL import Image
-from services.ocr import preprocessing
+from app.services.ocr import preprocessing
 
 
 class TestPreprocessing:

@@ -4,7 +4,7 @@ Shared pytest fixtures for OCR tests
 import pytest
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
-from services.ocr.base import BoundingBox, Word, OCRResult, ConfidenceStats, TextRegion
+from app.services.ocr.base import BoundingBox, Word, OCRResult, ConfidenceStats, TextRegion
 
 
 @pytest.fixture
@@ -179,7 +179,7 @@ def confidence_values_valid():
 @pytest.fixture
 def confidence_values_mixed():
     """Sample mixed confidence values (valid and default)"""
-    from services.ocr.base import DEFAULT_CONFIDENCE
+    from app.services.ocr.base import DEFAULT_CONFIDENCE
     return [0.90, DEFAULT_CONFIDENCE, 0.85, DEFAULT_CONFIDENCE, 0.95]
 
 

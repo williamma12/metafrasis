@@ -5,8 +5,8 @@ import pytest
 import torch
 import numpy as np
 from PIL import Image
-from services.ocr.detectors.craft import CRAFTDetector
-from services.ocr.base import TextRegion, BoundingBox
+from app.services.ocr.detectors.craft import CRAFTDetector
+from app.services.ocr.base import TextRegion, BoundingBox
 
 
 @pytest.mark.requires_craft

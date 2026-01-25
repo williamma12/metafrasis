@@ -4,7 +4,7 @@ Tests for AnnotationStorage service
 import pytest
 from pathlib import Path
 
-from services.annotation import (
+from app.services.annotation import (
     AnnotationStorage,
     AnnotationDataset,
     AnnotatedImage,

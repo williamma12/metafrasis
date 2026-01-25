@@ -7,7 +7,7 @@ Tests end-to-end inference from image to text using actual model weights.
 import pytest
 from PIL import Image, ImageDraw, ImageFont
 
-from services.ocr.factory import OCREngineFactory
+from app.services.ocr.factory import OCREngineFactory
 
 
 class TestOCRInferencePipeline:
@@ -31,7 +31,7 @@ class TestOCRInferencePipeline:
     @pytest.mark.requires_craft
     def test_craft_detector_inference(self, sample_text_image):
         """Test CRAFT detector can detect text regions."""
-        from services.ocr.detectors.craft import CRAFTDetector
+        from app.services.ocr.detectors.craft import CRAFTDetector
 
         detector = CRAFTDetector()
         detector.load_model()
@@ -46,8 +46,8 @@ class TestOCRInferencePipeline:
     @pytest.mark.requires_crnn
     def test_crnn_recognizer_inference(self, sample_text_image):
         """Test CRNN recognizer can recognize text from a region."""
-        from services.ocr.recognizers.crnn import CRNNRecognizer
-        from services.ocr.base import BoundingBox, TextRegion
+        from app.services.ocr.recognizers.crnn import CRNNRecognizer
+        from app.services.ocr.base import BoundingBox, TextRegion
 
         recognizer = CRNNRecognizer()
         recognizer.load_model()
@@ -145,7 +145,7 @@ class TestOCRPreprocessing:
 
     def test_pdf_to_images_with_sample(self, sample_pdf_path):
         """Test PDF to images conversion with sample PDF."""
-        from services.ocr.preprocessing import pdf_to_images
+        from app.services.ocr.preprocessing import pdf_to_images
 
         images = pdf_to_images(sample_pdf_path, dpi=72)
 

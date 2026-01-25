@@ -4,7 +4,7 @@ Tests for ImageCache
 import pytest
 from pathlib import Path
 from PIL import Image
-from services.ocr.cache import ImageCache
+from app.services.ocr.cache import ImageCache
 
 
 @pytest.fixture

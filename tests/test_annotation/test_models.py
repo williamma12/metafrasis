@@ -5,7 +5,7 @@ import pytest
 import json
 from datetime import datetime
 
-from services.annotation import (
+from app.services.annotation import (
     Point,
     Region,
     AnnotatedImage,

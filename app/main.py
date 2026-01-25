@@ -5,9 +5,9 @@ Main application entry point with sidebar navigation.
 """
 import streamlit as st
 
-from app.state import init_session_state
-from app.pages.ocr import render_ocr_page
-from app.pages.annotate import render_annotation_page
+from app.backend.state import init_session_state
+from app.backend.pages.ocr import render_ocr_page
+from app.backend.pages.annotate import render_annotation_page
 
 
 def main():

@@ -7,13 +7,13 @@ from datetime import datetime
 import numpy as np
 from PIL import Image
 
-from services.annotation.models import (
+from app.services.annotation.models import (
     AnnotationDataset,
     AnnotatedImage,
     Region,
     Point,
 )
-from services.annotation.storage import AnnotationStorage
+from app.services.annotation.storage import AnnotationStorage
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
 """Tests for evaluate base classes."""
 
 import pytest
-from training.evaluate.base import Metric, MetricResult
+from ml.training.evaluate.base import Metric, MetricResult
 
 
 class TestMetricResult:
@@ -42,7 +42,7 @@ class TestMetricABC:
 
     def test_concrete_implementation(self):
         """Test creating a concrete implementation."""
-        from training.evaluate import CERMetric
+        from ml.training.evaluate import CERMetric
 
         metric = CERMetric()
         assert metric.name == "cer"

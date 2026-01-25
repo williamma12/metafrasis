@@ -2,7 +2,7 @@
 
 import pytest
 import numpy as np
-from training.evaluate.detectors import (
+from ml.training.evaluate.detectors import (
     DetectorMetric,
     IoUMetric,
     PrecisionRecallF1Metric,

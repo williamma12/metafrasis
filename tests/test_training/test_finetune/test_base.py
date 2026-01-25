@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import torch
 import torch.nn as nn
 
-from training.finetune.base import BaseTrainer
+from ml.training.finetune.base import BaseTrainer
 
 
 class MockModel(nn.Module):
@@ -144,7 +144,7 @@ class TestMetricTracker:
 
     def test_metric_tracker_update(self):
         """Test updating metric tracker."""
-        from training.finetune.utils import MetricTracker
+        from ml.training.finetune.utils import MetricTracker
 
         tracker = MetricTracker()
         tracker.update({"loss": 0.5, "accuracy": 0.8})
@@ -157,7 +157,7 @@ class TestMetricTracker:
 
     def test_metric_tracker_multiple_epochs(self):
         """Test tracking across multiple epochs."""
-        from training.finetune.utils import MetricTracker
+        from ml.training.finetune.utils import MetricTracker
 
         tracker = MetricTracker()
 
@@ -171,7 +171,7 @@ class TestMetricTracker:
 
     def test_metric_tracker_save(self, temp_dir):
         """Test saving metrics to file."""
-        from training.finetune.utils import MetricTracker
+        from ml.training.finetune.utils import MetricTracker
 
         temp_dir = Path(tempfile.mkdtemp())
         tracker = MetricTracker()
@@ -189,7 +189,7 @@ class TestEarlyStopping:
 
     def test_early_stopping_no_improvement(self):
         """Test early stopping triggers after no improvement."""
-        from training.finetune.utils import EarlyStopping
+        from ml.training.finetune.utils import EarlyStopping
 
         early_stopping = EarlyStopping(patience=3, mode="min")
 
@@ -201,7 +201,7 @@ class TestEarlyStopping:
 
     def test_early_stopping_improvement_resets(self):
         """Test that improvement resets counter."""
-        from training.finetune.utils import EarlyStopping
+        from ml.training.finetune.utils import EarlyStopping
 
         early_stopping = EarlyStopping(patience=2, mode="min")
 
@@ -213,7 +213,7 @@ class TestEarlyStopping:
 
     def test_early_stopping_max_mode(self):
         """Test early stopping in max mode."""
-        from training.finetune.utils import EarlyStopping
+        from ml.training.finetune.utils import EarlyStopping
 
         early_stopping = EarlyStopping(patience=2, mode="max")
 
@@ -227,7 +227,7 @@ class TestLRScheduler:
 
     def test_cosine_scheduler(self):
         """Test cosine annealing scheduler."""
-        from training.finetune.utils import LRScheduler
+        from ml.training.finetune.utils import LRScheduler
 
         model = MockModel()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -251,7 +251,7 @@ class TestLRScheduler:
 
     def test_step_scheduler(self):
         """Test step scheduler."""
-        from training.finetune.utils import LRScheduler
+        from ml.training.finetune.utils import LRScheduler
 
         model = MockModel()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -280,7 +280,7 @@ class TestCheckpointing:
 
     def test_save_checkpoint(self):
         """Test saving a checkpoint."""
-        from training.finetune.utils import save_checkpoint
+        from ml.training.finetune.utils import save_checkpoint
 
         temp_dir = Path(tempfile.mkdtemp())
         model = MockModel()
@@ -298,7 +298,7 @@ class TestCheckpointing:
 
     def test_load_checkpoint(self):
         """Test loading a checkpoint."""
-        from training.finetune.utils import save_checkpoint, load_checkpoint
+        from ml.training.finetune.utils import save_checkpoint, load_checkpoint
 
         temp_dir = Path(tempfile.mkdtemp())
         model = MockModel()

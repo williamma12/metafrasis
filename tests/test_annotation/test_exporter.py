@@ -6,7 +6,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from services.annotation import (
+from app.services.annotation import (
     AnnotationExporter,
     AnnotationStorage,
     AnnotationDataset,

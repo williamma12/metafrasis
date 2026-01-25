@@ -3,9 +3,9 @@ Tests for OCR Engine Factory
 """
 import pytest
 from PIL import Image
-from services.ocr.factory import OCREngineFactory
-from services.ocr.base import OCREngine, OCRResult
-from services.ocr.types import DetectorType, RecognizerType, EngineType
+from app.services.ocr.factory import OCREngineFactory
+from app.services.ocr.base import OCREngine, OCRResult
+from app.services.ocr.types import DetectorType, RecognizerType, EngineType
 
 
 class TestOCREngineFactory:
