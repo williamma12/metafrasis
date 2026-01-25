@@ -63,24 +63,47 @@ uv run streamlit run app.py
 ```
 
 ### Testing
+
+**Quick Start:**
 ```bash
-# Run all tests (includes tests/ and native/)
+# Show all available test commands
+make help
+
+# Run all tests (Python + Frontend)
+make test-all
+
+# Run specific test suites
+make test-ml              # ML model tests (148 tests)
+make test-backend         # Backend/service tests (52 tests)
+make test-frontend        # All frontend tests (46 tests)
+make test-ocr-viewer      # Just OCR Viewer (16 tests)
+make test-annotation-canvas  # Just Annotation Canvas (30 tests)
+
+# Quick tests (skip slow tests)
+make test-quick
+
+# Coverage reports
+make test-coverage-ml
+make test-coverage-backend
+```
+
+**Manual Testing (pytest):**
+```bash
+# Run all Python tests
 uv run pytest
 
-# Run only app/service tests
-uv run pytest tests/
-
-# Run only native extension tests
-uv run pytest native/
+# Run specific test directory
+uv run pytest tests/ml/models/
+uv run pytest tests/app/
 
 # Run specific test file
-uv run pytest tests/test_ocr/test_factory.py
+uv run pytest tests/ml/models/test_layers.py
 
 # Run with coverage
 uv run pytest --cov=app --cov=ml --cov=native
 
 # Run single test function
-uv run pytest tests/test_ocr/test_base.py::test_ocr_result
+uv run pytest tests/ml/models/test_layers.py::TestConvBNLayer::test_output_shape_with_stride_1
 
 # Skip slow tests
 uv run pytest -m "not slow"
@@ -88,6 +111,27 @@ uv run pytest -m "not slow"
 # Run only MPS-specific tests
 uv run pytest -m requires_mps
 ```
+
+**Manual Testing (Frontend):**
+```bash
+# OCR Viewer
+cd app/frontend/ocr_viewer
+npm test              # Interactive mode
+npm test -- --run     # Run once and exit
+npm run test:coverage # With coverage
+
+# Annotation Canvas
+cd app/frontend/annotation_canvas
+npm test -- --run
+```
+
+**Test Suite Summary:**
+- **Total Tests**: 246 (100% passing)
+  - ML Models: 148 tests
+  - Backend: 52 tests
+  - Frontend: 46 tests (16 OCR Viewer + 30 Annotation Canvas)
+
+See **[docs/TESTING.md](docs/TESTING.md)** for complete testing documentation.
 
 ### Code Quality
 ```bash
@@ -163,6 +207,7 @@ The Streamlit app uses a dataclass-based session state pattern (`app.py`):
 ```
 metafrasis/
 ├── app.py                       # Streamlit UI - main entry point
+├── Makefile                     # Test automation (17 targets)
 ├── app/                         # Application code
 │   ├── config.py               # App configuration (UI, OCR settings)
 │   ├── main.py                 # Streamlit main entry with navigation
@@ -180,7 +225,11 @@ metafrasis/
 │   │   └── annotation/        # Annotation service
 │   └── frontend/               # React/TypeScript components
 │       ├── ocr_viewer/        # OCR result visualization
+│       │   ├── src/           # React components
+│       │   └── tests/         # Frontend tests (16 tests)
 │       └── annotation_canvas/ # Annotation drawing interface
+│           ├── src/           # React components
+│           └── tests/         # Frontend tests (30 tests)
 ├── ml/                          # Machine learning code
 │   ├── config.py               # ML configuration (models, device, registry)
 │   ├── models/                 # PyTorch model definitions (code only)
@@ -203,10 +252,18 @@ metafrasis/
 │       │   └── tests/        # Native extension tests
 │       ├── matmul/            # Matrix operations (future)
 │       └── kernels/           # Custom kernels (future)
-├── tests/                       # Test suite (mirrors app/ and ml/)
-│   ├── test_ocr/
-│   ├── test_annotation/
-│   └── test_training/
+├── tests/                       # Test suite
+│   ├── ml/models/              # ML model tests (148 tests)
+│   │   ├── test_layers.py     # ConvBNLayer, SEModule, BasicBlock, CTCDecoder
+│   │   ├── test_backbones.py  # VGG16BN, ResNet, MobileNetV3, CRNNCNN
+│   │   ├── test_necks.py      # FPN, BiLSTM, SequenceEncoder
+│   │   ├── test_heads.py      # CTCHead, DBHead
+│   │   ├── test_composites.py # CRAFT, DBNet, CRNN, PPOCRModel
+│   │   ├── test_registry.py   # Model registry validation
+│   │   └── conftest.py        # Shared fixtures
+│   └── app/                    # Backend tests (52 tests)
+│       ├── services/ocr/
+│       └── services/annotation/
 ├── installer/                   # macOS application bundler
 ├── data/                        # All gitignored
 │   ├── model_weights/          # Downloaded model weights
@@ -226,9 +283,11 @@ Requires Python 3.11+
 - Selected rules: E, F, I, N, W
 
 ### Test Configuration
+
+**Python Tests (pytest):**
 - Test files: `test_*.py`
 - Test functions: `test_*`
-- Test directories: `tests/` and `native/`
+- Test directories: `tests/ml/models/`, `tests/app/`, `native/`
 - Test markers:
   - `slow`: Long-running tests (skip with `-m "not slow"`)
   - `requires_craft`: Requires CRAFT model weights
@@ -236,6 +295,12 @@ Requires Python 3.11+
   - `requires_tesseract`: Requires Tesseract installation
   - `requires_mps`: Requires Apple Metal Performance Shaders
   - `requires_native`: Requires native extension compilation
+
+**Frontend Tests (vitest):**
+- Test files: `*.test.tsx`, `*.test.ts`
+- Test directories: `app/frontend/ocr_viewer/tests/`, `app/frontend/annotation_canvas/tests/`
+- Frameworks: Vitest, React Testing Library
+- Mock setup: `tests/setup.ts` in each component directory
 
 ## Training & Fine-tuning
 
@@ -287,6 +352,10 @@ state.ocr_text = "result"  # Persists across reruns
 The project is under active development:
 - ✅ Project structure and configuration
 - ✅ Streamlit UI pipeline flow
+- ✅ ML model implementations (CRAFT, DBNet, CRNN, PPOCRModel)
+- ✅ Frontend components (OCRViewer, AnnotationCanvas)
+- ✅ Comprehensive test suite (246 tests, 100% passing)
+- ✅ Test automation infrastructure (Makefile)
 - ⏳ OCR engines (planned - see docs/OCR_SERVICE.md)
 - ⏳ Training infrastructure (planned - see docs/TRAINING.md)
 - ⏳ Transliteration & translation services (planned)
@@ -298,3 +367,4 @@ The project is under active development:
 - **docs/OCR_SERVICE.md**: OCR service implementation plan with code samples
 - **docs/TRAINING.md**: Training infrastructure plan, vision annotation, benchmarking
 - **docs/QUICKSTART.md**: Installation and getting started guide
+- **docs/TESTING.md**: Comprehensive testing guide (test organization, commands, best practices)

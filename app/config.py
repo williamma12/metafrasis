@@ -4,6 +4,9 @@ Application configuration settings for Metafrasis UI and services
 import os
 from pathlib import Path
 
+# Re-export from ML config
+from ml.config import get_device, OCR_BATCH_SIZE
+
 # Project directories
 # Support bundled mode via environment variable override
 PROJECT_ROOT = Path(os.environ.get('METAFRASIS_ROOT', Path(__file__).parent.parent))

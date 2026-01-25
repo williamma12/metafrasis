@@ -6,7 +6,7 @@ Metafrasis is an Ancient Greek OCR, transliteration, and translation application
 
 ## Current Status
 
-**Interactive OCR Viewer Complete**
+**Testing Infrastructure Complete**
 
 Currently implemented:
 - ✅ Tesseract OCR engine (CPU baseline)
@@ -16,6 +16,14 @@ Currently implemented:
   - Hover tooltips for hidden words
   - Image navigation (First/Prev/Next/Last)
   - Toggle between original and annotated views
+- ✅ Interactive annotation canvas (custom React component)
+  - Rectangle and polygon drawing modes
+  - Select mode with region editing
+  - Keyboard shortcuts (Delete, Escape)
+  - Auto-detected vs user-created regions
+- ✅ ML model implementations (CRAFT, DBNet, CRNN, PPOCRModel)
+- ✅ Comprehensive test suite (246 tests, 100% passing)
+- ✅ Test automation infrastructure (Makefile, docs/TESTING.md)
 - ✅ Streamlit UI with multi-file upload
 - ✅ Streaming and batch processing pipelines
 - ✅ PDF support with automatic page conversion
@@ -208,42 +216,82 @@ metafrasis/
 
 ### Running Tests
 
-The project includes comprehensive tests for the OCR service:
+The project includes comprehensive tests covering ML models, backend services, and frontend components.
 
+**Quick Start (Makefile):**
 ```bash
-# Install dev dependencies
-./setup.sh --dev
+# Show all available test commands
+make help
 
-# Run all tests
+# Run all tests (Python + Frontend) - 246 tests
+make test-all
+
+# Run specific test suites
+make test-ml              # ML model tests (148 tests)
+make test-backend         # Backend/service tests (52 tests)
+make test-frontend        # All frontend tests (46 tests)
+
+# Individual frontend components
+make test-ocr-viewer           # OCR Viewer (16 tests)
+make test-annotation-canvas    # Annotation Canvas (30 tests)
+
+# Quick tests (skip slow tests)
+make test-quick
+
+# Coverage reports
+make test-coverage-ml
+make test-coverage-backend
+```
+
+**Manual Testing (Python/pytest):**
+```bash
+# Run all Python tests
 uv run pytest
 
-# Run tests with verbose output
-uv run pytest -v
-
-# Run only OCR service tests
-uv run pytest tests/test_ocr/ -v
+# Run specific test directories
+uv run pytest tests/ml/models/ -v      # ML model tests
+uv run pytest tests/app/ -v            # Backend tests
 
 # Run specific test file
-uv run pytest tests/test_ocr/test_base.py -v
-uv run pytest tests/test_ocr/test_factory.py -v
-uv run pytest tests/test_ocr/test_tesseract.py -v
-uv run pytest tests/test_ocr/test_cache.py -v
-uv run pytest tests/test_ocr/test_preprocessing.py -v
+uv run pytest tests/ml/models/test_layers.py -v
+uv run pytest tests/app/services/test_ocr.py -v
 
-# Run with coverage report
-uv run pytest --cov=services --cov=utils
+# Run with coverage
+uv run pytest tests/ml/models/ --cov=ml.models --cov-report=html
 
-# Run tests and skip slow tests
+# Skip slow tests
 uv run pytest -m "not slow"
 ```
 
-**Test Coverage:**
-- `test_base.py` - Base classes (BoundingBox, Word, OCRResult, confidence statistics)
-- `test_factory.py` - OCREngineFactory (engine registration and creation)
-- `test_tesseract.py` - Tesseract engine (recognition, bounding boxes, confidence)
-- `test_cache.py` - ImageCache (caching, retrieval, deduplication)
-- `test_preprocessing.py` - Preprocessing utilities (PDF to images)
-- `conftest.py` - Shared fixtures (sample images, mock data, test helpers)
+**Manual Testing (Frontend/vitest):**
+```bash
+# OCR Viewer
+cd app/frontend/ocr_viewer
+npm test              # Interactive mode
+npm test -- --run     # Run once and exit
+npm run test:coverage # With coverage
+
+# Annotation Canvas
+cd app/frontend/annotation_canvas
+npm test -- --run
+npm run test:ui       # Interactive UI mode
+```
+
+**Test Coverage Summary:**
+
+| Category | Tests | Coverage |
+|----------|-------|----------|
+| ML Models | 148 | Layers, backbones, necks, heads, composites, registry |
+| Backend | 52 | Pages, services, components |
+| OCR Viewer | 16 | Rendering, interactivity, layout, edge cases |
+| Annotation Canvas | 30 | Rectangle/polygon/select modes, keyboard shortcuts |
+| **Total** | **246** | **100% passing** |
+
+See **[docs/TESTING.md](TESTING.md)** for complete testing documentation including:
+- Test organization and structure
+- Writing new tests (best practices)
+- Troubleshooting guide
+- CI/CD integration
 
 ### Code Quality
 
@@ -406,6 +454,7 @@ brew install tesseract poppler create-dmg
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete system architecture
 - **[OCR_SERVICE.md](OCR_SERVICE.md)** - OCR implementation details
 - **[TRAINING.md](TRAINING.md)** - Training infrastructure plan
+- **[TESTING.md](TESTING.md)** - Comprehensive testing guide
 - **[CLAUDE.md](../CLAUDE.md)** - Guide for Claude Code development
 
 ## Contributing

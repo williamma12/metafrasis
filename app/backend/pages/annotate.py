@@ -359,7 +359,7 @@ def run_auto_detection(storage: AnnotationStorage, state: AnnotationState, curre
     st.info("Running auto-detection...")
 
     try:
-        from services.ocr.factory import OCREngineFactory
+        from app.services.ocr.factory import OCREngineFactory
 
         # Load image - try new structure first, then fall back to old
         image_path = storage.get_image_path_for_dataset(state.dataset.name, current_image.image_path)
