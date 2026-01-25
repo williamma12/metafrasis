@@ -76,94 +76,138 @@ Metafrasis is a modular Ancient Greek OCR application with a flexible detector +
 - Each stage can be inspected and edited
 - State preserved in Streamlit session
 
+### 6. Multi-Platform GPU Acceleration
+- **CUDA**: NVIDIA GPU support via PyTorch (automatic detection)
+- **MPS**: Apple Metal Performance Shaders for M1/M2/M3 Macs
+  - Native CTC loss implementation in `native/mps/ctc/`
+  - Future: Custom matmul and kernels for additional speedup
+- **CPU**: Automatic fallback for systems without GPU
+- All PyTorch models automatically use available accelerator
+
 ## Directory Structure
 
 ```
 metafrasis/
-├── app.py                       # Streamlit application
-├── config.py                    # Configuration
-├── pyproject.toml               # Dependencies
+├── app.py                            # Streamlit entry point
+├── pyproject.toml                    # Dependencies
 │
-├── services/                    # Business logic
-│   ├── ocr/                     # OCR service
-│   │   ├── __init__.py         # Registration
-│   │   ├── base.py             # OCREngine, Word, BoundingBox, TextRegion, OCRResult
-│   │   ├── types.py            # Type-safe enums (DetectorType, RecognizerType, EngineType)
-│   │   ├── factory.py          # OCREngineFactory with registries
-│   │   ├── preprocessing.py    # PDF conversion, image utilities
-│   │   ├── cache.py            # Temporary image caching
-│   │   │
-│   │   ├── detectors/          # Text detection inference (models in models/)
-│   │   │   ├── base.py        # TextDetector abstract base
-│   │   │   ├── whole_image.py # WholeImageDetector (pass-through)
-│   │   │   ├── craft.py       # CRAFTDetector (uses models.CRAFT)
-│   │   │   └── db.py          # DBDetector (uses models.DBNet)
-│   │   │
-│   │   ├── recognizers/        # Text recognition inference (models in models/)
-│   │   │   ├── base.py        # TextRecognizer abstract base
-│   │   │   ├── trocr.py       # TrOCRRecognizer (Transformer-based)
-│   │   │   ├── crnn.py        # CRNNRecognizer (uses models.CRNN)
-│   │   │   ├── ppocr.py       # PPOCRRecognizer (uses models.PPOCRModel)
-│   │   │   └── kraken.py      # KrakenRecognizer (library wrapper)
-│   │   │
-│   │   └── engines/            # OCR engine implementations
-│   │       ├── tesseract.py   # TesseractEngine (monolithic)
-│   │       └── pytorch_engine.py  # PyTorchOCREngine (modular composition)
+├── app/                              # Application code
+│   ├── config.py                    # App configuration
+│   ├── main.py                      # Streamlit main with navigation
 │   │
-│   ├── transliterate_service.py
-│   └── translate_service.py
+│   ├── backend/                     # Streamlit backend
+│   │   ├── pages/                  # Page implementations
+│   │   │   ├── ocr.py             # OCR page (455 lines)
+│   │   │   └── annotate.py        # Annotation page (455 lines)
+│   │   ├── components/             # Reusable UI components
+│   │   └── state.py                # Session state management
+│   │
+│   ├── services/                    # Business logic
+│   │   ├── ocr/                    # OCR service
+│   │   │   ├── base.py            # OCREngine, Word, BoundingBox, TextRegion, OCRResult
+│   │   │   ├── factory.py         # OCREngineFactory with registries
+│   │   │   ├── preprocessing.py   # PDF conversion, image utilities
+│   │   │   │
+│   │   │   ├── detectors/         # Text detection implementations
+│   │   │   │   ├── base.py       # TextDetector abstract base
+│   │   │   │   ├── whole_image.py # WholeImageDetector (pass-through)
+│   │   │   │   ├── craft.py      # CRAFTDetector (character-level)
+│   │   │   │   └── db.py         # DBDetector (differentiable binarization)
+│   │   │   │
+│   │   │   ├── recognizers/       # Text recognition implementations
+│   │   │   │   ├── base.py       # TextRecognizer abstract base
+│   │   │   │   ├── trocr.py      # TrOCRRecognizer (HuggingFace)
+│   │   │   │   ├── crnn.py       # CRNNRecognizer (CTC-based)
+│   │   │   │   ├── ppocr.py      # PPOCRRecognizer (Greek, PyTorch)
+│   │   │   │   ├── ppocr_onnx.py # PPOCR ONNX (production)
+│   │   │   │   └── kraken.py     # KrakenRecognizer (Ancient Greek)
+│   │   │   │
+│   │   │   └── engines/           # Complete OCR pipelines
+│   │   │       ├── tesseract.py  # TesseractEngine (monolithic)
+│   │   │       └── pytorch_engine.py  # PyTorchOCREngine (modular)
+│   │   │
+│   │   └── annotation/             # Annotation service
+│   │       ├── models.py          # Point, Region, AnnotatedImage, Dataset (248 lines)
+│   │       ├── storage.py         # Load/save, dataset management (392 lines)
+│   │       ├── exporter.py        # ZIP export for datasets (221 lines)
+│   │       └── canvas.py          # Streamlit component bridge (137 lines)
+│   │
+│   └── frontend/                    # React/TypeScript components
+│       ├── ocr_viewer/             # OCR result visualization (16 tests)
+│       └── annotation_canvas/      # Annotation drawing (30 tests)
 │
-├── training/                    # Training & optimization
-│   ├── README.md
-│   ├── configs/                # Training configs
-│   ├── finetune/               # Fine-tuning scripts
-│   ├── benchmarks/             # Engine comparison
-│   ├── data/                   # Dataset creation
-│   │   ├── vision_annotate.py # Vision model annotation
-│   │   ├── annotation_tool.py # Manual review
-│   │   └── dataset_builder.py
-│   └── notebooks/              # Experiments
+├── ml/                              # Machine learning code
+│   ├── config.py                   # ML configuration (device detection, registry)
+│   │
+│   ├── models/                     # PyTorch model definitions
+│   │   ├── registry.json          # Model URLs (committed)
+│   │   ├── download_models.py     # Download script (committed)
+│   │   ├── layers.py              # Shared layers (ConvBN, SE, CTC, etc.)
+│   │   │
+│   │   ├── backbones/             # Feature extractors
+│   │   │   ├── vgg.py            # VGG16BN (CRAFT)
+│   │   │   ├── resnet.py         # ResNetBackbone (DB)
+│   │   │   ├── mobilenet.py      # MobileNetV3 (PP-OCR)
+│   │   │   └── crnn_cnn.py       # CRNN CNN
+│   │   │
+│   │   ├── necks/                 # Feature aggregation
+│   │   │   ├── fpn.py            # Feature Pyramid Network (DB)
+│   │   │   └── sequence.py       # BiLSTM, SequenceEncoder
+│   │   │
+│   │   ├── heads/                 # Task-specific outputs
+│   │   │   ├── ctc.py            # CTCHead (recognition)
+│   │   │   └── db.py             # DBHead (detection)
+│   │   │
+│   │   └── composites/            # Full model architectures
+│   │       ├── craft.py          # CRAFT detector
+│   │       ├── dbnet.py          # DBNet detector
+│   │       ├── crnn.py           # CRNN recognizer
+│   │       └── ppocr.py          # PPOCRModel recognizer
+│   │
+│   └── training/                   # Training infrastructure (~3500 lines)
+│       ├── finetune/              # Fine-tuning scripts
+│       │   ├── base.py           # BaseTrainer (~570 lines)
+│       │   ├── recognizers/
+│       │   │   ├── crnn.py       # CTC-based training (136 lines)
+│       │   │   ├── ppocr.py      # PP-OCR training
+│       │   │   └── trocr.py      # LoRA fine-tuning (337 lines)
+│       │   └── detectors/
+│       │       ├── craft.py      # CRAFT training
+│       │       └── db.py         # DB training
+│       │
+│       ├── evaluate/              # Evaluation metrics
+│       │   └── metrics.py        # CER, WER, Precision, Recall, F1
+│       │
+│       └── export/                # Model export
+│           ├── to_onnx.py        # ONNX conversion (274 lines)
+│           └── to_huggingface.py # HuggingFace Hub upload (334 lines)
 │
-├── models/                      # Model definitions & management
-│   ├── __init__.py             # Package exports
-│   ├── registry.json           # Model URLs (IN GIT)
-│   ├── download_models.py      # Download script (IN GIT)
-│   ├── layers.py               # Shared building blocks (ConvBN, SE, CTC, etc.)
-│   ├── backbones/              # Feature extractors
-│   │   ├── vgg.py             # VGG16BN (CRAFT)
-│   │   ├── resnet.py          # ResNetBackbone (DB)
-│   │   ├── mobilenet.py       # MobileNetV3Backbone (PP-OCR)
-│   │   └── crnn_cnn.py        # CRNN CNN backbone
-│   ├── necks/                  # Feature aggregation
-│   │   ├── fpn.py             # Feature Pyramid Network (DB)
-│   │   └── sequence.py        # BiLSTM, SequenceEncoder
-│   ├── heads/                  # Task-specific outputs
-│   │   ├── ctc.py             # CTCHead
-│   │   └── db.py              # DBHead
-│   ├── composites/             # Full model architectures
-│   │   ├── craft.py           # CRAFT detector
-│   │   ├── dbnet.py           # DBNet detector
-│   │   ├── crnn.py            # CRNN recognizer
-│   │   └── ppocr.py           # PPOCRModel recognizer
-│   └── [downloaded weights]    # (GITIGNORED)
+├── native/                          # Platform-specific optimizations
+│   └── mps/                        # Metal Performance Shaders (macOS GPU)
+│       ├── ctc/                   # CTC loss (Metal-accelerated)
+│       │   ├── ctc_loss.py       # Python interface
+│       │   ├── csrc/             # Metal/C++ implementation
+│       │   └── tests/            # Native extension tests
+│       ├── matmul/                # Matrix operations (planned)
+│       └── kernels/               # Custom kernels (planned)
 │
-├── data/                        # Datasets (ALL GITIGNORED)
-│   ├── raw/                    # Unlabeled images
-│   ├── annotated/              # Vision-model annotated
-│   ├── reviewed/               # Manually corrected
-│   └── datasets/               # Final HF datasets
+├── data/                            # All gitignored
+│   ├── model_weights/              # Downloaded model weights
+│   ├── annotations/                # Annotation datasets
+│   └── training/                   # Training datasets
 │
-├── docs/                        # Documentation
-│   ├── ARCHITECTURE.md         # This file
-│   └── OCR_SERVICE.md          # Detailed OCR documentation
+├── docs/                            # Documentation
+│   ├── ARCHITECTURE.md             # This file
+│   ├── OCR_SERVICE.md              # OCR implementation details
+│   ├── ANNOTATION.md               # Annotation tool usage
+│   ├── TESTING.md                  # Testing guide
+│   └── QUICKSTART.md               # Setup guide
 │
-├── utils/                       # Shared utilities
-└── tests/                       # Unit tests
-    └── test_ocr/               # OCR service tests
-        ├── test_factory.py
-        ├── test_detectors/
-        ├── test_recognizers/
-        └── test_engines/
+└── tests/                           # Comprehensive test suite (246 tests)
+    ├── ml/models/                  # ML model tests (148 tests)
+    ├── app/                        # Backend tests (52 tests)
+    ├── frontend/                   # Component tests (46 tests)
+    └── native/                     # Native extension tests
 ```
 
 ## OCR Engine Architecture
@@ -294,15 +338,17 @@ OCREngineFactory.register_recognizer('trocr', TrOCRRecognizer)
 | Detector | Type | Output | Use Case |
 |----------|------|--------|----------|
 | **WholeImageDetector** | Pass-through | Single region (entire image) | End-to-end models like trOCR |
-| CRAFT (future) | Character-level | Polygons | Scene text, documents |
-| DB (future) | Document | Rectangles | Fast printed text |
+| **CRAFT** | Character-level | Polygons | Scene text, documents, manuscripts |
+| **DB** | Differentiable Binarization | Rectangles | Fast printed text, documents |
 
 **Recognizers (Modular):**
 | Recognizer | Type | Speed | GPU | Best For |
 |------------|------|-------|-----|----------|
-| **TrOCRRecognizer** | Transformer | Slow | Yes | Handwritten, Ancient Greek |
-| CRNN (future) | CNN+RNN | Fast | Optional | Printed text |
-| Kraken (future) | LSTM | Medium | Optional | Historical manuscripts |
+| **TrOCRRecognizer** | Transformer | Slow | Yes | Handwritten text |
+| **CRNNRecognizer** | CNN+RNN+CTC | Fast | Yes (CUDA, MPS, CPU) | Printed text, English |
+| **KrakenRecognizer** | LSTM | Medium | Yes (CUDA, MPS, CPU) | Ancient Greek manuscripts |
+| **PPOCRRecognizer** | MobileNetV3+BiLSTM | Fast | Yes (CUDA, MPS, CPU) | Greek language text |
+| **PPOCRONNXRecognizer** | ONNX Runtime | Very Fast | CPU optimized | Greek language text (production) |
 
 ### Cross-Image Batching Optimization
 
@@ -321,6 +367,65 @@ Example: 3 images × 2 regions = 6 regions
   - With batch_size=4: [4 regions batch, 2 regions batch] = 2 forward passes
   - Per-image: 3 forward passes
 ```
+
+## Annotation Service Architecture
+
+The annotation service provides a complete solution for creating and managing text region datasets.
+
+### Data Models
+
+```python
+@dataclass
+class Point:
+    x: float
+    y: float
+
+@dataclass
+class Region:
+    id: str
+    type: str  # 'rectangle' or 'polygon'
+    points: List[Point]
+    text: Optional[str]
+    auto_detected: bool  # True if from CRAFT, False if user-drawn
+    verified: bool       # User has reviewed this region
+
+@dataclass
+class AnnotatedImage:
+    image_id: str
+    image_path: str
+    regions: List[Region]
+    created_at: datetime
+    updated_at: datetime
+
+@dataclass
+class AnnotationDataset:
+    dataset_id: str
+    name: str
+    images: List[AnnotatedImage]
+    created_at: datetime
+```
+
+### Storage Layer
+
+- **JSON-based persistence**: Each dataset stored as JSON file
+- **Image references**: Relative paths to original images
+- **Version management**: Migration system for schema changes
+- **Atomic operations**: Safe concurrent access
+
+### Export Functionality
+
+- **ZIP export**: Package entire dataset with images and metadata
+- **HuggingFace integration**: Export in HF datasets format (planned)
+- **COCO/VOC formats**: Support for common annotation formats (planned)
+
+### Frontend Integration
+
+- **React Canvas**: Custom Streamlit component for drawing
+- **Drawing modes**: Rectangle, polygon, and select modes
+- **Auto-detection**: CRAFT-based region proposal
+- **Keyboard shortcuts**: Delete, Escape, etc.
+
+See **[ANNOTATION.md](ANNOTATION.md)** for detailed usage guide.
 
 ## Model Management
 
@@ -359,11 +464,53 @@ def get_model_path(engine_name: str, variant: str = "base"):
     return local_path
 ```
 
-## Training Architecture
+## Training Infrastructure
 
-### Vision Model Annotation
+The project includes comprehensive training infrastructure (~3500 lines of functional code).
 
-Use large vision models to annotate real images:
+### Base Trainer
+
+`ml/training/finetune/base.py` provides a complete training loop with:
+- **Training loop**: Epochs, batches, gradient accumulation
+- **Evaluation**: Validation metrics, early stopping
+- **Checkpointing**: Save best model, resume from checkpoint
+- **Logging**: Metrics, learning rate, loss curves
+- **Device management**: Automatic GPU selection (CUDA, MPS, CPU)
+
+### Fine-tuning Support
+
+**Recognition Models:**
+- **CRNN**: CTC-based training with CTCRecognizerTrainer
+- **PP-OCR**: Greek text recognition with gradient accumulation
+- **trOCR**: LoRA adapter fine-tuning (memory efficient, ~10 MB adapters)
+
+**Detection Models:**
+- **CRAFT**: Character-level detector training
+- **DBNet**: Differentiable Binarization detector training
+
+### Evaluation Metrics
+
+`ml/training/evaluate/metrics.py`:
+- **Character Error Rate (CER)**: Edit distance at character level
+- **Word Error Rate (WER)**: Edit distance at word level
+- **Precision/Recall/F1**: For detection tasks
+- **Confidence calibration**: Alignment between confidence and accuracy
+
+### Model Export
+
+**ONNX Conversion** (`ml/training/export/to_onnx.py`):
+- Convert PyTorch models to ONNX format
+- Production deployment with ONNX Runtime
+- Optimized inference (CPU-focused)
+
+**HuggingFace Hub** (`ml/training/export/to_huggingface.py`):
+- Upload models with model cards
+- Version management
+- Automatic README generation with usage examples
+
+### Vision Model Annotation (Planned)
+
+Future: Use large vision models to annotate real images:
 
 ```
 Raw Images → Vision Model (GPT-4V/Claude) → Annotations → Review → Dataset
@@ -378,25 +525,8 @@ Raw Images → Vision Model (GPT-4V/Claude) → Annotations → Review → Datas
 ### Fine-tuning Workflow
 
 ```
-Dataset → Fine-tune with LoRA → Upload to HuggingFace → Update Registry
+Dataset → Train with BaseTrainer → Evaluate → Export (ONNX/HF) → Update Registry
 ```
-
-**Supported Methods:**
-- trOCR: LoRA adapters (~10 MB)
-- EasyOCR: Full fine-tuning
-- Kraken: Custom model training
-
-### Benchmarking
-
-```
-Test Set → Run All Engines → Compute CER/WER → Visualize
-```
-
-Metrics tracked:
-- Character Error Rate (CER)
-- Word Error Rate (WER)
-- Confidence scores (when available)
-- Processing time
 
 ## Data Flow
 
@@ -466,32 +596,68 @@ ANTHROPIC_API_KEY=...
 
 ## Testing Strategy
 
+Comprehensive test suite with **246 tests, 100% passing**.
+
+### Test Organization
+
 ```
 tests/
-├── test_ocr/
-│   ├── conftest.py              # Shared fixtures (images, regions, words)
-│   ├── test_factory.py          # Factory pattern, registration
-│   │
-│   ├── test_detectors/
-│   │   ├── test_base.py        # TextDetector base class
-│   │   └── test_whole_image.py # WholeImageDetector
-│   │
-│   ├── test_recognizers/
-│   │   ├── test_base.py        # TextRecognizer base class
-│   │   └── test_trocr.py       # TrOCRRecognizer (mocked)
-│   │
-│   └── test_engines/
-│       ├── test_tesseract.py   # TesseractEngine
-│       └── test_pytorch_engine.py  # PyTorchOCREngine composition, batching
+├── ml/models/                  # ML model tests (148 tests)
+│   ├── test_layers.py         # Shared layers (ConvBN, SE, CTC, etc.)
+│   ├── test_backbones.py      # VGG, ResNet, MobileNetV3
+│   ├── test_necks.py          # FPN, BiLSTM, SequenceEncoder
+│   ├── test_heads.py          # CTCHead, DBHead
+│   ├── test_composites.py     # CRAFT, DBNet, CRNN, PPOCRModel
+│   └── test_registry.py       # Model registry and download
 │
-├── test_training/
-│   ├── test_vision_annotate.py
-│   └── test_dataset_builder.py
+├── app/                        # Backend tests (52 tests)
+│   ├── services/ocr/
+│   │   ├── test_factory.py   # Factory pattern, registration
+│   │   ├── test_detectors/   # CRAFT, DB, WholeImage
+│   │   ├── test_recognizers/ # trOCR, CRNN, Kraken, PP-OCR
+│   │   └── test_engines/     # Tesseract, PyTorchOCREngine
+│   │
+│   └── services/annotation/
+│       ├── test_models.py    # Data models
+│       ├── test_storage.py   # Load/save, dataset management
+│       └── test_exporter.py  # ZIP export
 │
-└── fixtures/
-    ├── test_images/
-    └── test_labels/
+├── frontend/                   # Component tests (46 tests, Vitest)
+│   ├── ocr_viewer/tests/      # OCR Viewer tests (16 tests)
+│   └── annotation_canvas/tests/  # Annotation Canvas tests (30 tests)
+│
+└── native/                     # Native extension tests
+    └── mps/ctc/tests/         # Metal CTC loss tests
 ```
+
+### Test Infrastructure
+
+- **pytest**: Python backend and ML tests
+- **Vitest**: Frontend React component tests
+- **Makefile**: Convenient test commands (make test-all, make test-ml, etc.)
+- **Coverage reporting**: HTML reports for all test suites
+- **Fast execution**: Mock weights, no model downloads
+
+### Running Tests
+
+```bash
+# All tests (Python + Frontend)
+make test-all              # 246 tests
+
+# Specific test suites
+make test-ml               # ML model tests (148 tests)
+make test-backend          # Backend tests (52 tests)
+make test-frontend         # Frontend tests (46 tests)
+
+# With coverage
+make test-coverage-ml
+make test-coverage-backend
+
+# Quick tests (skip slow tests)
+make test-quick
+```
+
+See **[TESTING.md](../TESTING.md)** for complete testing guide.
 
 ## Performance Considerations
 
@@ -539,19 +705,27 @@ Total: 2 recognition calls (batch_size=4)
 
 ## Future Enhancements
 
-### Near-term (Modular Architecture)
-- [ ] CRAFT detector implementation
-- [ ] DB detector implementation
-- [ ] CRNN recognizer implementation
-- [ ] Kraken recognizer implementation
+See **[ROADMAP.md](../ROADMAP.md)** for the complete feature roadmap and priorities.
+
+### High Priority
+- [ ] EasyOCR engine integration
+- [ ] Training UI (Streamlit interface for fine-tuning)
+- [ ] Improved Ancient Greek models (fine-tuned on more data)
+- [ ] OCR confidence filtering UI
+- [ ] Vision model annotation (GPT-4V, Claude integration)
+
+### Medium Priority
 - [ ] Ensemble voting (combine multiple detector+recognizer combinations)
+- [ ] Region merging and splitting tools
+- [ ] Multi-language switching (Ancient Greek, Latin, Coptic)
+- [ ] Batch annotation export (COCO, Pascal VOC, YOLO formats)
 
 ### Long-term
-- [ ] Real-time OCR with webcam
-- [ ] Mobile app integration
-- [ ] Collaborative annotation
-- [ ] Active learning loop
-- [ ] Multi-language support (Latin, Coptic)
+- [ ] Distributed training (multi-GPU with PyTorch DDP)
+- [ ] Mixed precision training (FP16/BF16)
+- [ ] CLI tool for batch processing
+- [ ] Docker support
+- [ ] API server with async job queue
 - [ ] Integration with digital libraries (Perseus, TLG)
 
 ## Key Architectural Decisions

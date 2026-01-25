@@ -9,33 +9,47 @@ Metafrasis is an Ancient Greek OCR, transliteration, and translation application
 **Testing Infrastructure Complete**
 
 Currently implemented:
-- ✅ Tesseract OCR engine (CPU baseline)
-- ✅ trOCR engine (PyTorch transformer with GPU support)
-- ✅ Interactive OCR viewer (custom React component)
+- ✅ **Multiple OCR Engines**:
+  - Tesseract (Ancient Greek support)
+  - Kraken (Ancient Greek manuscripts)
+  - PP-OCR (Greek language, PyTorch and ONNX)
+  - CRAFT + recognizers (modular detection + recognition)
+  - DB detector (Differentiable Binarization)
+- ✅ **GPU Acceleration**:
+  - CUDA (NVIDIA GPUs)
+  - MPS (Apple Metal Performance Shaders for M1/M2/M3)
+  - CPU fallback
+- ✅ **Interactive OCR Viewer** (custom React component)
   - Click-to-toggle individual bounding boxes
   - Hover tooltips for hidden words
   - Image navigation (First/Prev/Next/Last)
   - Toggle between original and annotated views
-- ✅ Interactive annotation canvas (custom React component)
+- ✅ **Interactive Annotation Canvas** (custom React component)
   - Rectangle and polygon drawing modes
   - Select mode with region editing
   - Keyboard shortcuts (Delete, Escape)
   - Auto-detected vs user-created regions
-- ✅ ML model implementations (CRAFT, DBNet, CRNN, PPOCRModel)
-- ✅ Comprehensive test suite (246 tests, 100% passing)
-- ✅ Test automation infrastructure (Makefile, docs/TESTING.md)
+- ✅ **ML Model Implementations**:
+  - CRAFT (character-level text detection)
+  - DBNet (Differentiable Binarization detection)
+  - CRNN (recognition with CTC loss)
+  - PPOCRModel (Greek recognition)
+- ✅ **Training Infrastructure**:
+  - Fine-tuning scripts for CRNN, PP-OCR, trOCR (LoRA), CRAFT, DBNet
+  - Evaluation metrics (CER, WER, Precision, Recall, F1)
+  - ONNX export and HuggingFace Hub upload
+- ✅ **Comprehensive Test Suite** (246 tests, 100% passing)
+  - 148 ML model tests
+  - 52 backend tests
+  - 46 frontend tests
 - ✅ Streamlit UI with multi-file upload
 - ✅ Streaming and batch processing pipelines
 - ✅ PDF support with automatic page conversion
 - ✅ Word-level bounding boxes and confidence statistics
-- ✅ Image disk caching (temporary storage)
 - ✅ Model registry and external model hosting
-- ✅ Automated setup script (includes Node.js/npm)
+- ✅ Automated setup script
 
-Coming soon:
-- ⏳ EasyOCR and Kraken engines
-- ⏳ Training infrastructure
-- ⏳ Transliteration & translation services
+See **[ROADMAP.md](../ROADMAP.md)** for planned features.
 
 ## Installation
 
@@ -135,7 +149,11 @@ Open your browser at `http://localhost:8501`
 
 In the sidebar, choose your OCR engine:
 - **Tesseract**: Fast, CPU-only, good for printed text
-- **trOCR**: Slower, GPU/CPU, excellent for handwritten text
+- **Kraken (Ancient Greek)**: Excellent for Ancient Greek manuscripts
+- **PP-OCR (Greek)**: Greek language support with high accuracy
+- **CRAFT + Recognizer**: Modular pipeline with custom detectors
+  - Detectors: CRAFT, DB (Differentiable Binarization)
+  - Recognizers: Kraken, PP-OCR, trOCR, CRNN
 
 ### 2. Choose Processing Pipeline
 
@@ -164,52 +182,107 @@ Click "Run OCR" and view results:
 |---------|---------|
 | Type | Traditional OCR (CPU) |
 | Speed | Fast (~0.5-2s per image) |
-| Accuracy | Good for printed text |
+| Ancient Greek | ✅ Yes (grc language data) |
 | Bounding Boxes | ✅ Yes (word-level) |
 | Confidence | ✅ Yes (per-word) |
+| GPU Support | ❌ No |
 | Best For | Printed books, clean scans |
 
-### trOCR
+### Kraken (Ancient Greek)
 
 | Feature | Details |
 |---------|---------|
-| Type | Transformer (PyTorch) |
-| Speed | Medium-Slow (GPU: ~1-2s, CPU: ~5-10s) |
-| Accuracy | Excellent for handwritten |
-| Bounding Boxes | ❌ No (end-to-end model) |
-| Confidence | ❌ No |
-| GPU Support | ✅ Yes (automatic detection) |
-| Batch Processing | ✅ Optimized |
-| Best For | Handwritten manuscripts |
+| Type | Specialized OCR (PyTorch) |
+| Speed | Medium (~2-4s per image) |
+| Ancient Greek | ✅ Excellent (trained on manuscripts) |
+| Bounding Boxes | ✅ Yes (word-level) |
+| Confidence | ✅ Yes |
+| GPU Support | ✅ Yes (CUDA, MPS, CPU) |
+| Best For | Ancient Greek manuscripts, polytonic text |
+
+### PP-OCR (Greek)
+
+| Feature | Details |
+|---------|---------|
+| Type | PaddleOCR pipeline (PyTorch) |
+| Speed | Medium-Fast (GPU: ~1-2s, CPU: ~3-5s) |
+| Ancient Greek | ✅ Yes (Greek language support) |
+| Bounding Boxes | ✅ Yes (via DB detector) |
+| Confidence | ✅ Yes |
+| GPU Support | ✅ Yes (CUDA, MPS, CPU) |
+| Best For | Greek text with high accuracy requirements |
+
+### CRAFT + Recognizers
+
+| Feature | Details |
+|---------|---------|
+| Type | Modular detector + recognizer |
+| Speed | Medium-Slow (depends on recognizer) |
+| Ancient Greek | ✅ Yes (with Kraken or PP-OCR recognizer) |
+| Bounding Boxes | ✅ Yes (character and word-level via CRAFT) |
+| Confidence | ✅ Yes |
+| GPU Support | ✅ Yes (CUDA, MPS, CPU) |
+| Customizable | ✅ Choose detector (CRAFT, DB) and recognizer |
+| Best For | Complex layouts, mixed scripts, fine-grained control |
 
 ## Model Management
 
-All models are hosted externally:
+All models are hosted externally and registered in `ml/models/registry.json`:
 - **Tesseract**: Ancient Greek traineddata from tessdata_best
-- **trOCR**: `microsoft/trocr-base-handwritten` from HuggingFace Hub
+- **Kraken**: Ancient Greek models from Kraken model zoo
+- **PP-OCR**: Greek models (PyTorch and ONNX versions)
+- **CRAFT**: Text detector models (Google Drive, HuggingFace)
+- **DB**: Differentiable Binarization detector
+- **CRNN**: Recognition models from HuggingFace
 
-Models are automatically downloaded on first use and cached locally in `models/` (gitignored).
+Models are automatically downloaded on first use and cached locally in `data/model_weights/` (gitignored).
+
+**GPU Acceleration**:
+- ✅ **CUDA**: NVIDIA GPU support (automatic detection)
+- ✅ **MPS**: Apple Metal Performance Shaders for M1/M2/M3 Macs
+- ✅ **CPU**: Automatic fallback for systems without GPU
 
 ## Project Architecture
 
 ```
 metafrasis/
-├── app.py                      # Streamlit UI
-├── config.py                   # Configuration
-├── scripts/
-│   └── setup.sh/               # Automated setup script
-├── services/
-│   └── ocr/                    # OCR service
-│       ├── base.py            # OCREngine, OCRResult, Word, BoundingBox
-│       ├── factory.py         # OCREngineFactory
-│       ├── preprocessing.py   # Image utilities + pdf_to_images()
-│       └── engines/
-│           ├── tesseract.py   # Tesseract engine
-│           └── trocr.py       # trOCR engine
-├── models/
-│   ├── registry.json          # Model URLs (committed)
-│   └── [cached models]        # Downloaded models (gitignored)
-└── docs/                      # Documentation
+├── app.py                           # Streamlit UI entry point
+├── app/                             # Application code
+│   ├── backend/pages/              # OCR and Annotation pages
+│   ├── services/ocr/               # OCR service
+│   │   ├── base.py                # OCREngine, OCRResult, Word, BoundingBox
+│   │   ├── factory.py             # OCREngineFactory
+│   │   ├── detectors/             # Text detection (CRAFT, DB, whole_image)
+│   │   ├── recognizers/           # Text recognition (Kraken, PP-OCR, trOCR, CRNN)
+│   │   └── engines/               # Complete OCR pipelines (Tesseract, PyTorch)
+│   ├── services/annotation/        # Annotation backend
+│   └── frontend/                   # React components (OCR Viewer, Annotation Canvas)
+├── ml/                              # Machine learning code
+│   ├── models/                     # PyTorch model definitions
+│   │   ├── registry.json          # Model URLs (committed)
+│   │   ├── backbones/             # VGG16BN, ResNet, MobileNetV3
+│   │   ├── necks/                 # FPN, BiLSTM
+│   │   ├── heads/                 # CTCHead, DBHead
+│   │   └── composites/            # CRAFT, DBNet, CRNN, PPOCRModel
+│   └── training/                   # Fine-tuning infrastructure
+│       ├── finetune/              # Trainer classes for all models
+│       ├── evaluate/              # Metrics (CER, WER, F1)
+│       └── export/                # ONNX and HuggingFace export
+├── native/                          # Platform-specific optimizations
+│   └── mps/                        # Metal Performance Shaders (macOS GPU)
+│       ├── ctc/                   # CTC loss implementation
+│       ├── matmul/                # Matrix operations (planned)
+│       └── kernels/               # Custom kernels (planned)
+├── tests/                           # Comprehensive test suite (246 tests)
+│   ├── ml/models/                 # ML model tests (148 tests)
+│   ├── app/                       # Backend tests (52 tests)
+│   ├── frontend/                  # Component tests (46 tests)
+│   └── native/                    # Native extension tests
+├── data/                            # All gitignored
+│   ├── model_weights/             # Downloaded model weights
+│   ├── annotations/               # Annotation data
+│   └── training/                  # Training datasets
+└── docs/                           # Documentation
 ```
 
 ## Development
@@ -444,17 +517,20 @@ brew install tesseract poppler create-dmg
 
 ## Next Steps
 
-- **Fine-tuning**: Coming soon - train custom trOCR models on your data
-- **More Engines**: EasyOCR and Kraken support planned
-- **Translation**: Ancient Greek to modern languages
-- **Transliteration**: Greek ↔ Latin script conversion
+- **Training UI**: Streamlit interface for fine-tuning models (training infrastructure fully implemented)
+- **EasyOCR Integration**: Additional OCR engine with multilingual support
+- **Improved Ancient Greek Models**: Fine-tuned models for better manuscript accuracy
+- **Transliteration & Translation**: Post-OCR processing services
+
+See **[ROADMAP.md](../ROADMAP.md)** for the complete feature roadmap and development timeline.
 
 ## Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete system architecture
 - **[OCR_SERVICE.md](OCR_SERVICE.md)** - OCR implementation details
-- **[TRAINING.md](TRAINING.md)** - Training infrastructure plan
+- **[ANNOTATION.md](ANNOTATION.md)** - Annotation tool usage and data formats
 - **[TESTING.md](TESTING.md)** - Comprehensive testing guide
+- **[ROADMAP.md](../ROADMAP.md)** - Planned features and development timeline
 - **[CLAUDE.md](../CLAUDE.md)** - Guide for Claude Code development
 
 ## Contributing

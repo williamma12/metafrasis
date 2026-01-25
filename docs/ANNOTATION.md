@@ -214,5 +214,3 @@ After annotation and export:
 
 1. **Detector Training**: Use the COCO JSON export with CRAFT or DBNet training scripts
 2. **Recognizer Training**: Use the cropped image-text pairs with CRNN, TrOCR, or PP-OCR training
-
-See [TRAINING.md](./TRAINING.md) for fine-tuning workflows.

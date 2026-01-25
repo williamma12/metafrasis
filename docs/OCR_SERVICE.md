@@ -389,9 +389,9 @@ engine = OCREngineFactory.create(
 )
 
 # Query available components
-engines = OCREngineFactory.available_engines()        # ['tesseract']
+engines = OCREngineFactory.available_engines()        # ['tesseract', 'kraken']
 detectors = OCREngineFactory.available_detectors()    # ['whole_image', 'craft', 'db']
-recognizers = OCREngineFactory.available_recognizers()  # ['trocr', 'crnn', 'kraken']
+recognizers = OCREngineFactory.available_recognizers()  # ['trocr', 'crnn', 'kraken', 'ppocr', 'ppocr_onnx']
 ```
 
 ### Registration System
@@ -440,6 +440,8 @@ class RecognizerType(str, Enum):
     TROCR = "trocr"
     CRNN = "crnn"
     KRAKEN = "kraken"
+    PPOCR = "ppocr"
+    PPOCR_ONNX = "ppocr_onnx"
 
 class EngineType(str, Enum):
     """Available monolithic engines"""
@@ -452,9 +454,12 @@ class EngineType(str, Enum):
 
 | Engine | Type | Speed | Accuracy | GPU | Best For |
 |--------|------|-------|----------|-----|----------|
-| **Tesseract** | Traditional | Fast | Good | No | Printed text, baseline comparisons |
+| **Tesseract** | Traditional | Fast | Good | No | Printed text, baseline comparisons, Ancient Greek support |
+| **Kraken** | RNN (all-in-one) | Medium | Excellent | Yes (CUDA, MPS, CPU) | Ancient Greek manuscripts, historical documents |
 
 **Tesseract** uses pytesseract library, supports Ancient Greek (`grc` language code), and provides word-level bounding boxes with confidence scores.
+
+**Kraken** can be used either as a monolithic engine (built-in detection + recognition) or as a recognizer in a modular pipeline. When used monolithically, it provides complete OCR functionality with layout analysis.
 
 ### Detectors
 
@@ -488,9 +493,11 @@ class EngineType(str, Enum):
 
 | Recognizer | Type | Speed | Accuracy | GPU | Best For |
 |------------|------|-------|----------|-----|----------|
-| **TrOCRRecognizer** | Transformer | Slow | Excellent | Yes | Handwritten text, fine-tuning, Ancient Greek |
-| **CRNNRecognizer** | CNN+RNN | Fast | Good | Optional | Printed text, real-time applications, resource-constrained environments |
-| **KrakenRecognizer** | RNN | Medium | Excellent | Optional | Historical documents, Ancient Greek manuscripts, degraded text |
+| **TrOCRRecognizer** | Transformer | Slow | Excellent | Yes | Handwritten text, fine-tuning |
+| **CRNNRecognizer** | CNN+RNN | Fast | Good | Yes (CUDA, MPS, CPU) | Printed text, real-time applications |
+| **KrakenRecognizer** | RNN | Medium | Excellent | Yes (CUDA, MPS, CPU) | Ancient Greek manuscripts, historical documents |
+| **PPOCRRecognizer** | MobileNetV3+BiLSTM | Fast | Excellent | Yes (CUDA, MPS, CPU) | Greek language text, high accuracy |
+| **PPOCRONNXRecognizer** | ONNX Runtime | Very Fast | Excellent | CPU optimized | Greek language text (production) |
 
 **TrOCRRecognizer** features:
 - HuggingFace transformer model (default: `microsoft/trocr-base-handwritten`)
@@ -521,6 +528,31 @@ class EngineType(str, Enum):
 - Wraps the kraken library (install: `pip install kraken`)
 - Configurable language/script codes
 - Batch processing with configurable batch size (default: 8)
+
+**PPOCRRecognizer** features:
+- PaddleOCR architecture ported to PyTorch
+- MobileNetV3 backbone for efficient feature extraction
+- Bidirectional LSTM for sequence modeling
+- CTC (Connectionist Temporal Classification) decoding
+- Optimized for Greek language text (Ancient and Modern)
+- Multi-platform GPU support: CUDA (NVIDIA), MPS (Apple Silicon), CPU
+- Fast inference with MobileNetV3 efficiency
+- Configurable character sets (Greek, Latin, digits)
+- Batch processing with configurable batch size (default: 16)
+- Pretrained weights available for Greek language
+- Input: 48-pixel height, variable width
+- Native PyTorch implementation for flexibility
+
+**PPOCRONNXRecognizer** features:
+- ONNX Runtime optimized version of PP-OCR
+- Significantly faster inference on CPU (~2-3x speedup)
+- Same architecture and accuracy as PPOCRRecognizer
+- Ideal for production deployment
+- Lower memory footprint
+- CPU-optimized with ONNX Runtime optimizations
+- Same Greek language support
+- Recommended for inference-only use cases
+- Quantization support for additional speedup (future)
 
 ## Cross-Image Batching Optimization
 
@@ -946,24 +978,3 @@ engine = OCREngineFactory.create_ensemble(
     strategy='confidence_weighted'
 )
 ```
-
-## Migration Notes
-
-### From Old Monolithic trOCR
-The old monolithic `TrOCREngine` has been replaced with modular components:
-
-**Old (deprecated):**
-```python
-engine = OCREngineFactory.create(engine='trocr')  # No longer works
-```
-
-**New (current):**
-```python
-engine = OCREngineFactory.create(
-    detector='whole_image',
-    recognizer='trocr',
-    device='cuda'
-)
-```
-
-The modular approach provides the same functionality with added flexibility for future detector combinations (e.g., CRAFT + trOCR).

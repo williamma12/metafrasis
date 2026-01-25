@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Metafrasis is an Ancient Greek OCR, transliteration, and translation application with a modular plugin architecture. The project uses Streamlit for the UI and supports multiple OCR engines (Tesseract, Kraken, EasyOCR, trOCR, Ensemble) with fine-tuning capabilities.
+Metafrasis is an Ancient Greek OCR and annotation platform with a modular plugin architecture. The project uses Streamlit for the UI and supports multiple OCR engines (Tesseract, Kraken, PP-OCR, CRAFT+recognizers) with comprehensive fine-tuning infrastructure.
 
 **Key Design Principles**:
 - All models are hosted externally (HuggingFace, S3, direct URLs). The repository contains NO model files - only `ml/models/registry.json` which maps model names to their external URLs. Models are downloaded on first use and cached locally.
@@ -349,22 +349,35 @@ state.ocr_text = "result"  # Persists across reruns
 
 ## Current Status
 
-The project is under active development:
-- ✅ Project structure and configuration
-- ✅ Streamlit UI pipeline flow
-- ✅ ML model implementations (CRAFT, DBNet, CRNN, PPOCRModel)
-- ✅ Frontend components (OCRViewer, AnnotationCanvas)
-- ✅ Comprehensive test suite (246 tests, 100% passing)
-- ✅ Test automation infrastructure (Makefile)
-- ⏳ OCR engines (planned - see docs/OCR_SERVICE.md)
-- ⏳ Training infrastructure (planned - see docs/TRAINING.md)
-- ⏳ Transliteration & translation services (planned)
+**Production-Ready Core Features**
+
+✅ **Implemented**:
+- Project structure with clean separation (app/, ml/, native/)
+- Streamlit UI with OCR and Annotation pages
+- ML model implementations (CRAFT, DBNet, CRNN, PPOCRModel)
+- OCR engines: Tesseract, Kraken, PP-OCR (PyTorch + ONNX), CRAFT+recognizers
+- Text detectors: CRAFT, DB (Differentiable Binarization), WholeImage
+- Text recognizers: Kraken (Ancient Greek), PP-OCR (Greek), trOCR, CRNN
+- Annotation service (models, storage, export, React canvas)
+- Training infrastructure (~3500 lines):
+  - Fine-tuning scripts for CRNN, PP-OCR, trOCR (LoRA), CRAFT, DBNet
+  - Evaluation metrics (CER, WER, Precision, Recall, F1)
+  - ONNX export and HuggingFace Hub upload
+- Frontend components (OCRViewer, AnnotationCanvas with full interactivity)
+- Comprehensive test suite (246 tests, 100% passing)
+- Test automation infrastructure (Makefile)
+- Model registry and external hosting system
+- GPU acceleration (CUDA, MPS, CPU)
+- Native MPS extensions (CTC loss for macOS)
+
+See **[ROADMAP.md](ROADMAP.md)** for planned features and development timeline.
 
 ## Additional Documentation
 
 - **README.md**: Project overview and quick start
-- **docs/ARCHITECTURE.md**: Complete architecture details, model management, testing strategy
-- **docs/OCR_SERVICE.md**: OCR service implementation plan with code samples
-- **docs/TRAINING.md**: Training infrastructure plan, vision annotation, benchmarking
-- **docs/QUICKSTART.md**: Installation and getting started guide
-- **docs/TESTING.md**: Comprehensive testing guide (test organization, commands, best practices)
+- **ROADMAP.md**: Planned features and development timeline
+- **docs/QUICKSTART.md**: Complete installation and setup guide
+- **docs/ARCHITECTURE.md**: System architecture, model management, testing strategy
+- **docs/OCR_SERVICE.md**: OCR engine implementation details and usage
+- **docs/ANNOTATION.md**: Annotation tool usage and data formats
+- **docs/TESTING.md**: Comprehensive testing guide (organization, commands, best practices)
